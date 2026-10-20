@@ -21,7 +21,7 @@ import org.testcontainers.utility.DockerImageName;
  */
 @SpringBootTest
 @ActiveProfiles("test")
-@Import(MutableClockConfig.class)
+@Import({MutableClockConfig.class, MockMvcContextPathConfig.class})
 public abstract class IntegrationTest {
 
     protected static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17");

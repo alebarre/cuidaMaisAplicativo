@@ -106,7 +106,7 @@ estados e a matriz de visibilidade têm um teste por linha/célula.
 
 ## Fase 2 — API de autenticação e conta
 
-- [ ] **T-020** `POST /auth/signup` (resposta neutra 202, D-15): cria `AGUARDANDO_CONFIRMACAO_EMAIL`;
+- [x] **T-020** `POST /auth/signup` (resposta neutra 202, D-15): cria `AGUARDANDO_CONFIRMACAO_EMAIL`;
   e-mail existente não cria nada e avisa o dono. ACs: 001.1, 001.3, 001.4, 011.1, 011.2.
   *Pronto quando:* testes para cadastro novo, e-mail repetido (mesma resposta, nada criado,
   e-mail de aviso no Mailpit), senha fraca e endereço inválido.

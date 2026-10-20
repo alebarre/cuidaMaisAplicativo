@@ -38,6 +38,10 @@ spring:
 
 server:
   port: ${SERVER_PORT:8080}
+  servlet:
+    # D-18/D-32/contrato: `servers: [{url: /api/v1}]` no openapi.yaml. Configurado uma única vez
+    # aqui para que toda rota nasça no lugar certo sem prefixar cada @RequestMapping (T-020).
+    context-path: /api/v1
 
 app:
   mail:
