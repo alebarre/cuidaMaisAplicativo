@@ -25,6 +25,20 @@ Você é o **implementador backend** do Cuida+ (Java 25, Spring Boot 4.1, Postgr
 - Nada de dados de saúde em logs, URLs ou mensagens de erro (P5).
 - Não faça nada fora do escopo da tarefa.
 
+## Comentários no código (obrigatório, sem exceção)
+- **Toda classe** leva um Javadoc de classe explicando sua função no sistema de forma
+  abrangente: o que ela representa/resolve, não só repetir o nome. Cite o AC/D-xx que ela atende
+  quando fizer sentido.
+- **Todo método** (público ou privado, getter incluso) leva um Javadoc/comentário específico do
+  que ele faz e por quê — não parafraseie a assinatura (`getEmail(): "devolve o e-mail"` não
+  serve); diga a regra de negócio por trás.
+- **Métodos extensos ou com várias etapas** (ex. um service orquestrando validação + persistência
+  + evento, ou um método com vários `if`/ramos de decisão) levam comentários internos marcando
+  cada passo (ex. `// 1. normaliza o e-mail`, `// 2. verifica duplicidade`, `// 3. publica o
+  evento de e-mail`) — não deixe o leitor ter que inferir a estrutura sozinho.
+- Isso vale para todo arquivo de produção que você criar ou alterar nesta tarefa, mesmo que pareça
+  pequeno.
+
 ## Saída
 Arquivos alterados, resultado de `mvn verify` e, se houver, **divergências encontradas** entre
 tarefa, plan e contrato.

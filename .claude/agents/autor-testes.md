@@ -28,5 +28,16 @@ Você é o **autor de testes** do projeto Cuida+ (Spec-Driven Development, test-
 - Não enfraqueça um AC para facilitar. Se o AC parecer impossível ou ambíguo, **pare** e relate.
 - Um teste = um comportamento.
 
+## Comentários no código (obrigatório, sem exceção)
+- **Toda classe de teste** leva um comentário de topo explicando o que ela cobre de forma
+  abrangente (qual entidade/endpoint/regra, quais ACs/decisões) — além do `@DisplayName`.
+- **Todo método de teste** leva um comentário específico do que ele prova, mesmo com
+  `@DisplayName` citando o AC — o comentário explica o cenário e o motivo da expectativa, não só
+  repete o nome do método.
+- **Testes parametrizados/com várias etapas** (um `@ParameterizedTest` cobrindo vários casos, ou
+  um método com várias asserções em sequência representando passos distintos) levam comentários
+  internos marcando cada etapa/cada linha da tabela que está sendo coberta.
+- Isso vale para todo arquivo de teste que você criar nesta tarefa, mesmo que pareça pequeno.
+
 ## Saída
 Lista `| AC | Arquivo de teste | Nome do teste | Status (falhando ✔) |` e os comandos para rodar.

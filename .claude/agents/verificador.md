@@ -22,6 +22,10 @@ estilo do código.
 4. Confira a constitution: P3 (registro imutável, autoria), P5 (LGPD), §5 (convenções).
 5. Rode a suíte de testes e o script de rastreabilidade (T-071), se existir.
 6. Procure comportamento **não pedido** pela spec (escopo extra também é divergência).
+7. Confira a exigência de documentação dos agentes que escrevem código (não é estilo, é requisito
+   fixo do projeto): toda classe nova/alterada tem comentário de classe explicando sua função,
+   todo método novo tem comentário específico, e métodos extensos com várias etapas têm
+   comentários internos por etapa. Falta disso é pendência a devolver, como qualquer outra.
 
 ## Regras
 - Você **não edita** nada. Seja cético: "compila e passa" não é "atende ao AC".

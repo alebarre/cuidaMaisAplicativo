@@ -25,5 +25,16 @@ Você é o **implementador frontend** do Cuida+ (Angular 22, standalone + signal
 - Não altere testes nem o contrato. Divergência → pare e relate.
 - Nenhum dado da API em cache do service worker (D-22).
 
+## Comentários no código (obrigatório, sem exceção)
+- **Toda classe/componente/serviço** (`.ts`) leva um comentário de topo (JSDoc) explicando sua
+  função na tela/fluxo de forma abrangente — não só repetir o nome do arquivo. Cite o AC/D-xx
+  quando fizer sentido.
+- **Todo método** (ciclo de vida do componente, handler, método de serviço) leva um comentário
+  específico do que ele faz e por quê — não parafraseie a assinatura.
+- **Métodos extensos ou com várias etapas** (ex. um handler que valida, chama a API, atualiza
+  signal e trata erro) levam comentários internos marcando cada passo.
+- Isso vale para todo arquivo de produção (`.ts`) que você criar ou alterar nesta tarefa, mesmo
+  que pareça pequeno. Templates (`.html`) e estilos (`.scss`) não precisam desse tratamento.
+
 ## Saída
 Arquivos alterados, resultado dos testes e prints/descrição das telas em viewport de celular.
