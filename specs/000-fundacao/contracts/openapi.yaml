@@ -825,10 +825,16 @@ components:
         application/problem+json:
           schema: { $ref: '#/components/schemas/ValidationProblem' }
     InvalidCode:
-      description: Código de confirmação incorreto. Informa quantas tentativas restam (AC-005.2).
+      description: |
+        Código de confirmação incorreto, informando quantas tentativas restam (AC-005.2,
+        `InvalidCodeProblem`), ou corpo da requisição inválido (ex. e-mail malformado,
+        `ValidationProblem`) — as duas únicas formas de `400` destas rotas.
       content:
         application/problem+json:
-          schema: { $ref: '#/components/schemas/InvalidCodeProblem' }
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/ValidationProblem'
+              - $ref: '#/components/schemas/InvalidCodeProblem'
     InvalidInviteCode:
       description: |
         E-mail ou código de convite inválidos (mensagem única, exista convite ou não, AC-004.7).
