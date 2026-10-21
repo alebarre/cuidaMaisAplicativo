@@ -63,6 +63,12 @@ Detalhes finos de permissão são definidos em cada spec e **testados**.
 - Datas/horas em **ISO-8601 com fuso** (`OffsetDateTime`); exibição em `America/Sao_Paulo`.
 - Erros no formato **RFC 9457 (Problem Details)**.
 - Listagens paginadas (`page`, `size`) e filtráveis por período.
+- **Toda operação com corpo de requisição (`requestBody`) declara uma resposta `400`** (em geral
+  `ValidationError`/`ValidationProblem`, ou um `oneOf` que a inclua) desde a primeira versão do
+  contrato — mesmo que a tarefa de implementação pareça distante. Faltar isso é o tipo de lacuna
+  que só aparece quando a tarefa já está sendo implementada, forçando uma pausa para corrigir o
+  contrato (Constitution §7) no meio do trabalho; `revisor-spec` e quem escrever/revisar
+  `contracts/openapi.yaml` devem checar essa regra explicitamente antes de aprovar o contrato.
 
 ## 6. Qualidade e testes
 
@@ -95,3 +101,4 @@ integrações com farmácias ou prontuários, app nativo.
 - 2026-09-25 — v1.1 — §3: um único Responsável por grupo, sem transferência do papel (spec 000 rev. 3/4).
 - 2026-09-25 — v1.2 — §3: Responsável deixa de ser um terceiro papel e passa a ser um **Familiar com permissão de administrador** (spec 000 rev. 9).
 - 2026-09-25 — v1.3 — P3: registrada a única exceção à imutabilidade, a **exclusão do grupo pelo Responsável** (spec 000 rev. 12, AC-013); §3: "excluir o grupo" entra na lista de poderes do administrador.
+- 2026-10-21 — v1.4 — §5: toda operação com corpo de requisição declara `400` desde a primeira versão do contrato (achado em T-022/T-023: `/auth/verify-email`, `/auth/login`, `/auth/resend-code` e `PATCH /elders/{elderId}/members/{memberId}` tinham essa lacuna no contrato 000, já corrigida).
