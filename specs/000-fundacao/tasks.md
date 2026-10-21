@@ -114,7 +114,7 @@ estados e a matriz de visibilidade têm um teste por linha/célula.
   absoluto de 30 dias**, rotação e detecção de reuso; cookie `HttpOnly; Secure; SameSite=Strict`
   (D-11, D-12). AC: 008.3. *Pronto quando:* testes de renovação, expiração após 7 dias sem uso,
   expiração no dia 30 mesmo com uso diário, e revogação da família no reuso.
-- [ ] **T-022** `POST /auth/verify-email` ativa a conta e abre sessão; **não cria grupo** (D-05
+- [x] **T-022** `POST /auth/verify-email` ativa a conta e abre sessão; **não cria grupo** (D-05
   rev. 2). ACs: 001.2, 005.1, 005.2. Depende de: T-021. *Pronto quando:* após confirmar, `users`
   tem `email_verified_at` e **não** existe membership.
 - [ ] **T-023** `POST /auth/login`: `401` único para e-mail inexistente, senha errada e conta

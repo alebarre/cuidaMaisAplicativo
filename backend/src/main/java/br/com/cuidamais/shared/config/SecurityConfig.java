@@ -21,21 +21,23 @@ public class SecurityConfig {
      * os logins padrão do Spring Security ({@code httpBasic}, {@code formLogin}) ficam
      * desligados, inclusive para não poluir o log com o aviso de senha gerada automaticamente.
      *
-     * <p><strong>Esta cadeia só libera o necessário para a T-020</strong> ({@code /auth/signup}
-     * público) e exige autenticação em qualquer outra rota. As tarefas seguintes desta fase
-     * (T-021 JWT, T-024 filtro completo que lê {@code status}/{@code role}/{@code is_admin} do
-     * banco) vão estender esta classe, liberando as demais rotas públicas do contrato ({@code
-     * /auth/verify-email}, {@code /auth/login}, {@code /auth/resend-code}, {@code
-     * /auth/password-reset/*}, {@code /invitations/redeem}, {@code /invitations/register}) à
-     * medida que forem implementadas (D-32, D-16).
+     * <p><strong>Esta cadeia libera só o necessário até a T-022</strong> ({@code /auth/signup},
+     * {@code /auth/verify-email}, públicas) e exige autenticação em qualquer outra rota. As
+     * tarefas seguintes desta fase (T-024 filtro completo que lê {@code status}/{@code role}/
+     * {@code is_admin} do banco) vão estender esta classe, liberando as demais rotas públicas do
+     * contrato ({@code /auth/login}, {@code /auth/resend-code}, {@code /auth/password-reset/*},
+     * {@code /invitations/redeem}, {@code /invitations/register}) à medida que forem
+     * implementadas (D-32, D-16).
      */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http.csrf(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
-                .authorizeHttpRequests(
-                        auth -> auth.requestMatchers("/auth/signup").permitAll().anyRequest().authenticated())
+                .authorizeHttpRequests(auth -> auth.requestMatchers("/auth/signup", "/auth/verify-email")
+                        .permitAll()
+                        .anyRequest()
+                        .authenticated())
                 .build();
     }
 

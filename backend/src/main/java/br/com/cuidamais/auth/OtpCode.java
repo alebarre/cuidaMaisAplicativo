@@ -9,6 +9,7 @@ import jakarta.persistence.Table;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -65,9 +66,16 @@ public class OtpCode {
     /**
      * Emite um novo código (AC-005.1): recebe só o hash (D-04), nasce sem tentativas, não
      * consumido, com prazo de 15 min a partir de agora.
+     *
+     * <p>{@code agora} é truncado para microssegundos (T-022): {@code expires_at}/{@code
+     * last_sent_at} são colunas {@code timestamp} do PostgreSQL, que só guarda até microssegundos
+     * — sem truncar aqui, o valor em memória (nanossegundos) e o valor depois de um
+     * save/reload divergiriam por arredondamento do driver JDBC, podendo folgar o prazo de 15 min
+     * em até ~500 ns e quebrar a verificação exata do limite (AC-005.1) depois de um reload da
+     * entidade (ex. {@code VerifyEmailService}, que sempre busca o {@code OtpCode} do banco).
      */
     public static OtpCode issue(UUID userId, OtpPurpose purpose, String codeHash, Clock clock) {
-        Instant agora = clock.instant();
+        Instant agora = clock.instant().truncatedTo(ChronoUnit.MICROS);
         OtpCode otp = new OtpCode();
         otp.id = UUID.randomUUID();
         otp.userId = userId;
@@ -112,7 +120,9 @@ public class OtpCode {
      * autenticar — desde que respeitado o intervalo mínimo de 60 s desde o último envio.
      */
     public void resend(String newCodeHash, Clock clock) {
-        Instant agora = clock.instant();
+        // Mesmo truncamento de #issue: garante que expires_at/last_sent_at sobrevivam a um
+        // save/reload sem variar por arredondamento de precisão do driver JDBC (T-022).
+        Instant agora = clock.instant().truncatedTo(ChronoUnit.MICROS);
         if (agora.isBefore(lastSentAt.plus(INTERVALO_REENVIO))) {
             throw new IllegalStateException("Reenvio de OTP respeita o intervalo de 60 s (AC-005.3)");
         }

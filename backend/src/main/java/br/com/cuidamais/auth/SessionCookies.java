@@ -40,6 +40,10 @@ public final class SessionCookies {
                 .secure(true)
                 .sameSite("Strict")
                 .maxAge(maxAge)
+                // Contrato (responses.SessionStarted): o cookie só é enviado de volta ao
+                // navegador para requisições sob /api/v1/auth (ex. /auth/refresh, /auth/logout),
+                // nunca para as demais rotas da API — restringe onde o refresh token circula.
+                .path("/api/v1/auth")
                 .build();
     }
 }

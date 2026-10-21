@@ -1,5 +1,7 @@
 package br.com.cuidamais.shared;
 
+import br.com.cuidamais.auth.CodeExpiredOrExhaustedException;
+import br.com.cuidamais.auth.InvalidCodeException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
@@ -46,6 +48,8 @@ public class GlobalExceptionHandler {
     private static final URI NOT_ALLOWED_TYPE = URI.create("/problems/not-allowed");
     private static final URI NOT_FOUND_TYPE = URI.create("/problems/not-found");
     private static final URI INTERNAL_ERROR_TYPE = URI.create("/problems/internal-error");
+    private static final URI INVALID_CODE_TYPE = URI.create("/problems/invalid-code");
+    private static final URI CODE_EXPIRED_TYPE = URI.create("/problems/code-expired-or-exhausted");
 
     /** AC-015.3 / D-32: validação de {@code @Valid @RequestBody}. */
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -107,6 +111,43 @@ public class GlobalExceptionHandler {
         problem.setTitle("Recurso não encontrado");
         problem.setInstance(URI.create(request.getRequestURI()));
         return problemResponse(HttpStatus.NOT_FOUND, problem);
+    }
+
+    /**
+     * T-022, AC-005.2: código de confirmação de formato válido mas diferente do esperado.
+     * {@code remainingAttempts} (quantas tentativas erradas ainda restam) vai no corpo como
+     * {@code InvalidCodeProblem} do contrato — nunca o código certo nem qualquer outro dado da
+     * conta (P5).
+     */
+    @ExceptionHandler(InvalidCodeException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidCode(
+            InvalidCodeException exception, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST, "O código informado está incorreto.");
+        problem.setType(INVALID_CODE_TYPE);
+        problem.setTitle("Código incorreto");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        problem.setProperty("code", "INVALID_CODE");
+        problem.setProperty("remainingAttempts", exception.getRemainingAttempts());
+        return problemResponse(HttpStatus.BAD_REQUEST, problem);
+    }
+
+    /**
+     * T-022, AC-005.1/AC-005.2: "nada a confirmar agora" — código expirado, já consumido, com as
+     * tentativas esgotadas, conta sem código pendente, ou e-mail sem conta nenhuma. {@code
+     * Problem} genérico, sem {@code remainingAttempts} (P5: os cinco motivos são indistinguíveis
+     * na resposta, para nunca revelar se o e-mail informado tem cadastro).
+     */
+    @ExceptionHandler(CodeExpiredOrExhaustedException.class)
+    public ResponseEntity<ProblemDetail> handleCodeExpiredOrExhausted(
+            CodeExpiredOrExhaustedException exception, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.GONE, "Código expirado ou esgotado; peça um código novo.");
+        problem.setType(CODE_EXPIRED_TYPE);
+        problem.setTitle("Código expirado ou esgotado");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        problem.setProperty("code", "CODE_EXPIRED_OR_EXHAUSTED");
+        return problemResponse(HttpStatus.GONE, problem);
     }
 
     /**

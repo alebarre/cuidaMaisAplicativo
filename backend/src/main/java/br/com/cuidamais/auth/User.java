@@ -166,6 +166,19 @@ public class User {
         return emailVerifiedAt != null;
     }
 
+    /**
+     * Confirma o e-mail da conta (AC-001.2, T-022): grava {@code emailVerifiedAt} com o "agora"
+     * do relógio injetado (D-10), que é a única mudança de estado que a confirmação de e-mail
+     * provoca na conta — vira {@code ATIVO} pela derivação de {@link #isEmailVerified()} (D-33).
+     * Por decisão de D-05 rev. 2, confirmar o e-mail <strong>não</strong> cria grupo nem
+     * membership; isso só acontece no cadastro do idoso ({@code POST /elders}, tarefa futura).
+     *
+     * @param clock relógio injetado (D-10), nunca o relógio de sistema
+     */
+    public void verifyEmail(Clock clock) {
+        this.emailVerifiedAt = clock.instant();
+    }
+
     /** Contador de tentativas de login erradas seguidas (D-14); zera no acerto. */
     public int getFailedLogins() {
         return failedLogins;
