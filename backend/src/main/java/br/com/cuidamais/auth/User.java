@@ -9,6 +9,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.UUID;
@@ -19,14 +20,21 @@ import java.util.UUID;
  * <p>A T-017 mapeou só o id e {@code email_verified_at}, o mínimo que {@link AccountState#of}
  * precisa. O cadastro (T-020) completa o mapeamento com os demais campos da tabela {@code users}:
  * nome, e-mail (único, garantido pela migração), telefone, endereço embutido ({@link Endereco},
- * D-25), hash de senha e os contadores de bloqueio de senha (D-14, tarefa futura). {@link
- * #signup} é o único caminho de criação por cadastro: normaliza o e-mail para minúsculas (único
+ * D-25), hash de senha e os contadores de bloqueio de senha (D-14, usados pelo login na T-023 —
+ * ver {@link #isLoginLocked}/{@link #registerFailedLogin}/{@link #registerSuccessfulLogin}).
+ * {@link #signup} é o único caminho de criação por cadastro: normaliza o e-mail para minúsculas (único
  * lugar que faz essa normalização na criação) e nasce em {@code AGUARDANDO_CONFIRMACAO_EMAIL}
  * (sem {@code email_verified_at}, D-33).
  */
 @Entity
 @Table(name = "users")
 public class User {
+
+    /** AC-008.4 / D-14 rev. 2: senhas erradas seguidas que disparam o bloqueio por conta. */
+    private static final int LIMITE_ERROS_LOGIN = 5;
+
+    /** AC-008.4 / D-14 rev. 2: duração do bloqueio por conta a partir da 5ª senha errada. */
+    private static final Duration JANELA_BLOQUEIO_LOGIN = Duration.ofMinutes(15);
 
     @Id
     @Column(name = "id")
@@ -197,5 +205,75 @@ public class User {
     /** Quando a conta foi criada. */
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    /**
+     * Confere se a conta está bloqueada por senha errada agora (AC-008.4, D-14 rev. 2). O bloqueio
+     * é fechado-aberto: no instante exato de {@code lockedUntil} a conta já está livre (mesmo
+     * critério de {@code OtpCode#isExpired}) — por isso a comparação é {@code agora <
+     * lockedUntil}, não {@code <=}.
+     *
+     * @param clock relógio injetado (D-10), nunca o relógio de sistema
+     * @return {@code true} só enquanto houver um {@code lockedUntil} futuro
+     */
+    public boolean isLoginLocked(Clock clock) {
+        return lockedUntil != null && clock.instant().isBefore(lockedUntil);
+    }
+
+    /**
+     * Libera um bloqueio já vencido (AC-008.4 "ao fim dos 15 minutos o contador também volta a
+     * zero", D-09: verificado na leitura, sem job agendado). {@link LoginService#login} chama este
+     * método <strong>antes</strong> de avaliar qualquer tentativa nova, para que a janela de 15
+     * min expirada já apareça como "sem bloqueio" para o resto do fluxo.
+     *
+     * <p>Sem bloqueio ativo este método não faz nada: erros parciais (contador abaixo de 5) não
+     * têm janela para vencer, então não são apagados por aqui — só um acerto
+     * ({@link #registerSuccessfulLogin()}) zera esse caso.
+     *
+     * @param clock relógio injetado (D-10)
+     */
+    public void clearExpiredLoginLock(Clock clock) {
+        if (lockedUntil != null && !clock.instant().isBefore(lockedUntil)) {
+            this.failedLogins = 0;
+            this.lockedUntil = null;
+            this.lockNotifiedAt = null;
+        }
+    }
+
+    /**
+     * Registra uma tentativa de login com senha errada (AC-008.4, D-14 rev. 2). Quem chama já deve
+     * ter conferido {@link #isLoginLocked(Clock)} antes de chegar aqui; por segurança, durante o
+     * bloqueio este método não faz nada (não soma, não estende {@code lockedUntil}, não regrava
+     * {@code lockNotifiedAt}) e devolve {@code false} — decisão desta tarefa: o bloqueio não se
+     * prolonga a cada tentativa nova e não há um segundo e-mail.
+     *
+     * @param clock relógio injetado (D-10), usado para {@code lockedUntil}/{@code lockNotifiedAt}
+     * @return {@code true} só na tentativa que faz o contador chegar a 5 (a transição para
+     *     bloqueado) — sinal para quem chamou publicar o {@code PasswordLockEmail} agora, uma única
+     *     vez; {@code false} em qualquer outro caso (erros 1 a 4, ou chamada durante o bloqueio)
+     */
+    public boolean registerFailedLogin(Clock clock) {
+        if (isLoginLocked(clock)) {
+            return false;
+        }
+        this.failedLogins++;
+        if (this.failedLogins >= LIMITE_ERROS_LOGIN) {
+            Instant agora = clock.instant();
+            this.lockedUntil = agora.plus(JANELA_BLOQUEIO_LOGIN);
+            this.lockNotifiedAt = agora;
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Login com a senha certa (AC-008.4 "um login correto zera o contador"): some ao passado
+     * qualquer erro anterior e qualquer bloqueio em andamento. Chamado só depois da senha confirmada
+     * (D-07: a regra mora na entidade, não no {@code LoginService}).
+     */
+    public void registerSuccessfulLogin() {
+        this.failedLogins = 0;
+        this.lockedUntil = null;
+        this.lockNotifiedAt = null;
     }
 }

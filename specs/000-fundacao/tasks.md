@@ -117,7 +117,7 @@ estados e a matriz de visibilidade têm um teste por linha/célula.
 - [x] **T-022** `POST /auth/verify-email` ativa a conta e abre sessão; **não cria grupo** (D-05
   rev. 2). ACs: 001.2, 005.1, 005.2. Depende de: T-021. *Pronto quando:* após confirmar, `users`
   tem `email_verified_at` e **não** existe membership.
-- [ ] **T-023** `POST /auth/login`: `401` único para e-mail inexistente, senha errada e conta
+- [x] **T-023** `POST /auth/login`: `401` único para e-mail inexistente, senha errada e conta
   bloqueada (inclusive com senha certa); bloqueio por conta após 5 erros por 15 min com **um**
   e-mail na transição; contador zera no acerto e ao fim da janela; `403` com `code` por estado só
   com senha correta (D-14, D-15, D-33). ACs: 008.1, 008.2, 008.4.

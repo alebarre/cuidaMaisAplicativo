@@ -1,7 +1,10 @@
 package br.com.cuidamais.shared;
 
+import br.com.cuidamais.auth.AccountNotActiveException;
+import br.com.cuidamais.auth.AccountStateValue;
 import br.com.cuidamais.auth.CodeExpiredOrExhaustedException;
 import br.com.cuidamais.auth.InvalidCodeException;
+import br.com.cuidamais.auth.InvalidCredentialsException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
@@ -50,6 +53,8 @@ public class GlobalExceptionHandler {
     private static final URI INTERNAL_ERROR_TYPE = URI.create("/problems/internal-error");
     private static final URI INVALID_CODE_TYPE = URI.create("/problems/invalid-code");
     private static final URI CODE_EXPIRED_TYPE = URI.create("/problems/code-expired-or-exhausted");
+    private static final URI INVALID_CREDENTIALS_TYPE = URI.create("/problems/invalid-credentials");
+    private static final URI ACCOUNT_NOT_ACTIVE_TYPE = URI.create("/problems/account-not-active");
 
     /** AC-015.3 / D-32: validação de {@code @Valid @RequestBody}. */
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -148,6 +153,58 @@ public class GlobalExceptionHandler {
         problem.setInstance(URI.create(request.getRequestURI()));
         problem.setProperty("code", "CODE_EXPIRED_OR_EXHAUSTED");
         return problemResponse(HttpStatus.GONE, problem);
+    }
+
+    /**
+     * T-023, AC-008.4, D-15: e-mail inexistente, senha errada ou conta bloqueada por 5 erros
+     * seguidos — os três motivos respondem com o mesmo {@code Problem} genérico (P5), sem
+     * nenhum campo de extensão e sem nenhum dado da conta no corpo, para nunca revelar se um
+     * e-mail tem cadastro ou se a conta informada está bloqueada.
+     */
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidCredentials(
+            InvalidCredentialsException exception, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.UNAUTHORIZED, "E-mail ou senha inválidos.");
+        problem.setType(INVALID_CREDENTIALS_TYPE);
+        problem.setTitle("Credenciais inválidas");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        return problemResponse(HttpStatus.UNAUTHORIZED, problem);
+    }
+
+    /**
+     * T-023, AC-008.2, D-33: e-mail e senha corretos, mas a conta não está {@code ATIVO}. O
+     * {@code code} segue a tabela do contrato ({@code AccountStateProblem}) e só é revelado
+     * depois da senha confirmada — nunca para quem apenas tenta e-mails ao acaso.
+     */
+    @ExceptionHandler(AccountNotActiveException.class)
+    public ResponseEntity<ProblemDetail> handleAccountNotActive(
+            AccountNotActiveException exception, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.FORBIDDEN, "A conta não está ativa.");
+        problem.setType(ACCOUNT_NOT_ACTIVE_TYPE);
+        problem.setTitle("Conta não ativa");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        problem.setProperty("code", accountStateCodeOf(exception.getState()));
+        return problemResponse(HttpStatus.FORBIDDEN, problem);
+    }
+
+    /**
+     * Tabela fixa do contrato ({@code AccountStateProblem.code}, AC-008.2): cada estado não-{@code
+     * ATIVO} da conta vira um código estável para o frontend decidir a mensagem/ação. {@code
+     * ATIVO} nunca chega aqui (sempre abre sessão, 200) — ver {@code LoginService#login}.
+     */
+    private static String accountStateCodeOf(AccountStateValue state) {
+        return switch (state) {
+            case AGUARDANDO_CONFIRMACAO_EMAIL -> "AWAITING_EMAIL_CONFIRMATION";
+            case AGUARDANDO_APROVACAO -> "AWAITING_APPROVAL";
+            case RECUSADO -> "REJECTED";
+            case EXPIRADO -> "EXPIRED";
+            case REMOVIDO -> "REMOVED";
+            case ATIVO ->
+                    throw new IllegalStateException(
+                            "ATIVO nunca gera AccountNotActiveException (AC-008.2)");
+        };
     }
 
     /**
