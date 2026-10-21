@@ -1257,6 +1257,7 @@ components:
                 properties:
                   field: { type: string, example: address.zipCode }
                   message: { type: string, example: CEP deve ter 8 dígitos }
+      unevaluatedProperties: false
     InvalidCodeProblem:
       allOf:
         - $ref: '#/components/schemas/Problem'
@@ -1264,6 +1265,7 @@ components:
           required: [remainingAttempts]
           properties:
             remainingAttempts: { type: integer, minimum: 0, maximum: 4 }
+      unevaluatedProperties: false
     AccountStateProblem:
       allOf:
         - $ref: '#/components/schemas/Problem'
@@ -1273,6 +1275,7 @@ components:
             code:
               type: string
               enum: [AWAITING_EMAIL_CONFIRMATION, AWAITING_APPROVAL, REJECTED, EXPIRED, REMOVED]
+      unevaluatedProperties: false
     InviteBlockedProblem:
       allOf:
         - $ref: '#/components/schemas/Problem'
@@ -1284,6 +1287,7 @@ components:
               type: string
               format: date-time
               description: Fim do bloqueio de 30 min; o frontend mostra o contador regressivo (AC-004.7, D-41)
+      unevaluatedProperties: false
     InvitationUnavailableProblem:
       allOf:
         - $ref: '#/components/schemas/Problem'
@@ -1294,6 +1298,7 @@ components:
               type: string
               description: '`INVITATION_EXPIRED` = status VENCIDO'
               enum: [INVITATION_EXPIRED, INVITATION_CANCELLED, INVITATION_USED]
+      unevaluatedProperties: false
     InvitationConflictProblem:
       allOf:
         - $ref: '#/components/schemas/Problem'
@@ -1303,3 +1308,4 @@ components:
             code:
               type: string
               enum: [ALREADY_MEMBER, EMAIL_UNAVAILABLE, NO_ELDER]
+      unevaluatedProperties: false
