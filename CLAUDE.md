@@ -18,6 +18,15 @@ Este projeto segue **Spec-Driven Development**. A fonte da verdade são os docum
 - IDs (US, AC, D, R, T) nunca são renumerados.
 - NUNCA commite, faça merges ou pushes no GIT de ABSOLUTAMENTE NADA sem minha permissão/pedido expresso.
 - NUNCA insira mensagem nenhuma (co-autoria, co-participação, revisão, nada) no GIT sem minha expressa permissão/pedido.
+- **NUNCA, em hipótese alguma, commite senha, credencial, chave/segredo (JWT, API key, token de
+  serviço) ou qualquer outro dado sensível no repositório remoto** — nem em código, nem em
+  `application*.yml`, nem em migração, nem em mensagem de commit/PR. Esses valores só existem no
+  `.env` local (já no `.gitignore`, nunca commitado) e chegam ao código em tempo de execução via
+  variável de ambiente (`${VAR_NAME}`/`@Value`). Um arquivo versionado só pode conter, no máximo,
+  o **nome** da variável e um valor de exemplo claramente não-real em `.env.example` (ex.
+  `JWT_SECRET` de desenvolvimento, nunca o segredo de produção). Antes de qualquer `git add`,
+  confira o conteúdo de arquivos de configuração novos/alterados por esse motivo, mesmo que o
+  nome do arquivo pareça inofensivo.
 
 ## Agentes (`.claude/agents/`)
 

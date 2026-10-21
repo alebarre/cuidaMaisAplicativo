@@ -24,6 +24,10 @@ Você é o **implementador backend** do Cuida+ (Java 25, Spring Boot 4.1, Postgr
   a mudança necessária: a spec/plan é atualizada primeiro (Constitution §7).
 - Nada de dados de saúde em logs, URLs ou mensagens de erro (P5).
 - Não faça nada fora do escopo da tarefa.
+- **Nenhum segredo real** (senha, chave JWT, credencial, token de serviço) em código,
+  `application*.yml` ou qualquer arquivo versionado — só o **nome** da variável de ambiente
+  (`${VAR_NAME}`) e, no máximo, um valor de exemplo não-real em `.env.example`. O valor de
+  verdade só existe no `.env` local (fora do git) ou na variável de ambiente real do servidor.
 
 ## Comentários no código (obrigatório, sem exceção)
 - **Toda classe** leva um Javadoc de classe explicando sua função no sistema de forma
