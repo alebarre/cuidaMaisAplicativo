@@ -110,7 +110,7 @@ estados e a matriz de visibilidade têm um teste por linha/célula.
   e-mail existente não cria nada e avisa o dono. ACs: 001.1, 001.3, 001.4, 011.1, 011.2.
   *Pronto quando:* testes para cadastro novo, e-mail repetido (mesma resposta, nada criado,
   e-mail de aviso no Mailpit), senha fraca e endereço inválido.
-- [ ] **T-021** JWT de 15 min + refresh token opaco de 7 dias renovado a cada uso, com **teto
+- [x] **T-021** JWT de 15 min + refresh token opaco de 7 dias renovado a cada uso, com **teto
   absoluto de 30 dias**, rotação e detecção de reuso; cookie `HttpOnly; Secure; SameSite=Strict`
   (D-11, D-12). AC: 008.3. *Pronto quando:* testes de renovação, expiração após 7 dias sem uso,
   expiração no dia 30 mesmo com uso diário, e revogação da família no reuso.

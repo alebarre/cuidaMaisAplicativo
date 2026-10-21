@@ -74,6 +74,26 @@
       <scope>runtime</scope>
     </dependency>
 
+    <!-- T-021 (D-11): emissão/validação do JWT de acesso (HS256), autoassinado, sem Authorization
+         Server completo. jjwt-jackson resolve o (de)serializador JSON dos claims. -->
+    <dependency>
+      <groupId>io.jsonwebtoken</groupId>
+      <artifactId>jjwt-api</artifactId>
+      <version>0.12.6</version>
+    </dependency>
+    <dependency>
+      <groupId>io.jsonwebtoken</groupId>
+      <artifactId>jjwt-impl</artifactId>
+      <version>0.12.6</version>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.jsonwebtoken</groupId>
+      <artifactId>jjwt-jackson</artifactId>
+      <version>0.12.6</version>
+      <scope>runtime</scope>
+    </dependency>
+
     <!-- Testes: JUnit 5, AssertJ, MockMvc e Testcontainers (Constitution §6, T-003) -->
     <dependency>
       <groupId>org.springframework.boot</groupId>

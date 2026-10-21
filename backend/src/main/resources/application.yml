@@ -46,6 +46,12 @@ server:
 app:
   mail:
     from: ${MAIL_FROM:Cuida+ <nao-responda@cuidamais.local>}
+  jwt:
+    # T-021 (D-11): segredo HMAC do access token (HS256, mínimo 32 bytes). Sem valor padrão aqui
+    # de propósito (regra do projeto: nenhum segredo, nem "só de dev", fica commitado) — dev usa
+    # o `.env` local (ver .env.example); o profile test define o seu próprio em
+    # application-test.yml; produção exige JWT_SECRET real (application-prod.yml, sem padrão).
+    secret: ${JWT_SECRET}
   jobs:
     # T-019 (plan D-09, R-06): um único @Scheduled, a cada 5 min, numa instância só; o profile test desliga
     enabled: ${JOBS_ENABLED:true}
