@@ -5,6 +5,7 @@ import br.com.cuidamais.auth.AccountStateValue;
 import br.com.cuidamais.auth.CodeExpiredOrExhaustedException;
 import br.com.cuidamais.auth.InvalidCodeException;
 import br.com.cuidamais.auth.InvalidCredentialsException;
+import br.com.cuidamais.auth.TooManyRequestsException;
 import br.com.cuidamais.shared.security.AccountStateException;
 import br.com.cuidamais.shared.security.UnauthorizedSessionException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -15,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.context.MessageSourceResolvable;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
@@ -59,6 +61,7 @@ public class GlobalExceptionHandler {
     private static final URI ACCOUNT_NOT_ACTIVE_TYPE = URI.create("/problems/account-not-active");
     private static final URI UNAUTHORIZED_TYPE = URI.create("/problems/unauthorized");
     private static final URI ACCOUNT_STATE_TYPE = URI.create("/problems/account-state");
+    private static final URI TOO_MANY_REQUESTS_TYPE = URI.create("/problems/too-many-requests");
 
     /** AC-015.3 / D-32: validação de {@code @Valid @RequestBody}. */
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -225,6 +228,28 @@ public class GlobalExceptionHandler {
         problem.setInstance(URI.create(request.getRequestURI()));
         problem.setProperty("code", "ACCOUNT_STATE");
         return problemResponse(HttpStatus.FORBIDDEN, problem);
+    }
+
+    /**
+     * T-026, AC-005.3: reenvio de código ou pedido de redefinição de senha chegou antes do
+     * intervalo mínimo de 1 min desde o último envio. O cabeçalho HTTP {@code Retry-After} (não um
+     * campo do corpo — contrato, {@code components.responses.TooManyRequests.headers.Retry-After})
+     * informa quantos segundos faltam para o próximo pedido ser aceito; o corpo é um {@code
+     * Problem} genérico, sem nenhum dado da conta (P5).
+     */
+    @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<ProblemDetail> handleTooManyRequests(
+            TooManyRequestsException exception, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.TOO_MANY_REQUESTS, "Aguarde antes de pedir um novo código.");
+        problem.setType(TOO_MANY_REQUESTS_TYPE);
+        problem.setTitle("Muitas requisições");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        problem.setProperty("code", "TOO_MANY_REQUESTS");
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(exception.getRetryAfterSeconds()))
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body(problem);
     }
 
     /**

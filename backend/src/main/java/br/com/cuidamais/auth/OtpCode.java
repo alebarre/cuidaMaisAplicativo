@@ -133,6 +133,28 @@ public class OtpCode {
         this.consumedAt = null;
     }
 
+    /**
+     * Segundos que faltam para completar o intervalo mínimo de reenvio de 60 s desde {@code
+     * lastSentAt} (AC-005.3, T-026), arredondado para cima — usado para o cabeçalho {@code
+     * Retry-After} quando {@link #resend} recusa o pedido por ter chegado antes da hora. Chamado
+     * depois que {@link #resend} já lançou {@link IllegalStateException}, quando {@code
+     * lastSentAt} ainda é o valor antigo (o método não altera nenhum campo antes de recusar).
+     *
+     * @param clock relógio injetado (D-10), nunca o relógio de sistema
+     * @return segundos restantes (nunca negativo; 0 se o prazo já tiver passado)
+     */
+    public long secondsUntilResendAllowed(Clock clock) {
+        Instant prazo = lastSentAt.plus(INTERVALO_REENVIO);
+        Duration restante = Duration.between(clock.instant(), prazo);
+        long segundos = restante.getSeconds();
+        if (restante.getNano() > 0) {
+            // Duration.getSeconds() trunca para baixo; qualquer resto de nanossegundos positivo
+            // significa que ainda falta uma fração de segundo, que arredondamos para cima.
+            segundos++;
+        }
+        return Math.max(segundos, 0);
+    }
+
     public UUID getId() {
         return id;
     }

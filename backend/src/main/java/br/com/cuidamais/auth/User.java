@@ -187,6 +187,18 @@ public class User {
         this.emailVerifiedAt = clock.instant();
     }
 
+    /**
+     * Troca a senha da conta (T-026, AC-010.3, D-37): grava só o hash novo, sem tocar em mais
+     * nenhum outro campo — nem {@code emailVerifiedAt}, nem os contadores de bloqueio de login
+     * (D-14). É intencional que este método não derive para nenhum outro estado: D-37/AC-010.5
+     * exige que redefinir a senha nunca mude o estado da conta, seja ela qual for.
+     *
+     * @param newPasswordHash hash BCrypt da senha nova (D-14); o texto puro nunca chega aqui
+     */
+    public void changePassword(String newPasswordHash) {
+        this.passwordHash = newPasswordHash;
+    }
+
     /** Contador de tentativas de login erradas seguidas (D-14); zera no acerto. */
     public int getFailedLogins() {
         return failedLogins;

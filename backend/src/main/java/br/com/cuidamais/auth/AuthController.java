@@ -16,8 +16,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Rotas públicas de autenticação (T-020, T-022, T-023, T-025). O prefixo {@code /api/v1} do
- * contrato vem do {@code server.servlet.context-path} global (application.yml), por isso o
+ * Rotas públicas de autenticação (T-020, T-022, T-023, T-025, T-026). O prefixo {@code /api/v1}
+ * do contrato vem do {@code server.servlet.context-path} global (application.yml), por isso o
  * mapeamento aqui é só {@code /auth}.
  */
 @RestController
@@ -29,6 +29,8 @@ public class AuthController {
     private final LoginService loginService;
     private final RefreshTokenService refreshTokenService;
     private final JwtService jwtService;
+    private final ResendCodeService resendCodeService;
+    private final PasswordResetService passwordResetService;
     private final Clock clock;
 
     /**
@@ -37,6 +39,8 @@ public class AuthController {
      * @param loginService regra de negócio do login (T-023)
      * @param refreshTokenService regra de negócio de rotação/revogação do refresh token (T-021, T-025)
      * @param jwtService emite o access token novo que acompanha a rotação (T-025)
+     * @param resendCodeService regra de negócio do reenvio de código (T-026)
+     * @param passwordResetService regra de negócio do pedido/confirmação de redefinição de senha (T-026)
      * @param clock relógio injetado (D-10), passado adiante para {@code created_at}/cookies
      */
     public AuthController(
@@ -45,12 +49,16 @@ public class AuthController {
             LoginService loginService,
             RefreshTokenService refreshTokenService,
             JwtService jwtService,
+            ResendCodeService resendCodeService,
+            PasswordResetService passwordResetService,
             Clock clock) {
         this.signupService = signupService;
         this.verifyEmailService = verifyEmailService;
         this.loginService = loginService;
         this.refreshTokenService = refreshTokenService;
         this.jwtService = jwtService;
+        this.resendCodeService = resendCodeService;
+        this.passwordResetService = passwordResetService;
         this.clock = clock;
     }
 
@@ -82,6 +90,20 @@ public class AuthController {
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
                 .body(AccessTokenResponse.of(session.accessToken()));
+    }
+
+    /**
+     * AC-001.6, AC-005.3 (D-15): reenvia o código <strong>pendente</strong> (ainda não consumido)
+     * de uma finalidade — sempre 202 sem corpo, exista ou não a conta, exista ou não um código
+     * pendente daquela finalidade; a única recusa possível é o limite de 1/min (AC-005.3), que
+     * {@link ResendCodeService} sinaliza com {@link TooManyRequestsException}, mapeada em {@code
+     * GlobalExceptionHandler} para {@code 429} com o cabeçalho {@code Retry-After}.
+     */
+    @PublicEndpoint
+    @PostMapping("/resend-code")
+    public ResponseEntity<Void> resendCode(@Valid @RequestBody ResendCodeRequest request) {
+        resendCodeService.resend(request.email(), request.purpose());
+        return ResponseEntity.accepted().build();
     }
 
     /**
@@ -142,6 +164,35 @@ public class AuthController {
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
                 .body(AccessTokenResponse.of(accessToken));
+    }
+
+    /**
+     * AC-010.1, AC-010.2 (D-15): pede o código para redefinir a senha — sempre 202 sem corpo,
+     * exista ou não a conta (D-15, P5). Delegado por completo a {@link PasswordResetService}: se
+     * já havia um código pendente, o pedido é tratado como reenvio e pode recusar com {@code 429}
+     * (mesma exceção/cabeçalho {@code Retry-After} de {@link #resendCode}).
+     */
+    @PublicEndpoint
+    @PostMapping("/password-reset/request")
+    public ResponseEntity<Void> requestPasswordReset(@Valid @RequestBody EmailOnlyRequest request) {
+        passwordResetService.requestReset(request.email());
+        return ResponseEntity.accepted().build();
+    }
+
+    /**
+     * AC-010.3, AC-010.4, AC-010.5 (D-37): com o código certo, troca a senha e encerra
+     * <strong>todas</strong> as sessões da conta (D-37) — responde {@code 204} sem corpo e sem
+     * {@code Set-Cookie} nenhum, porque este método, diferente de {@link #verifyEmail}/{@link
+     * #login}, nunca abre sessão (a pessoa precisa entrar de novo com a senha nova). Código errado
+     * ou expirado/esgotado/e-mail desconhecido são tratados pelas mesmas exceções de {@link
+     * #verifyEmail} ({@link InvalidCodeException}, {@link CodeExpiredOrExhaustedException}) — este
+     * método não trata nenhum dos dois casos de erro.
+     */
+    @PublicEndpoint
+    @PostMapping("/password-reset/confirm")
+    public ResponseEntity<Void> confirmPasswordReset(@Valid @RequestBody PasswordResetConfirmRequest request) {
+        passwordResetService.confirm(request.email(), request.code(), request.newPassword());
+        return ResponseEntity.noContent().build();
     }
 
     /**

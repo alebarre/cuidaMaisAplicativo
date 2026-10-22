@@ -132,7 +132,7 @@ estados e a matriz de visibilidade têm um teste por linha/célula.
 - [x] **T-025** `[P]` `POST /auth/refresh` e `POST /auth/logout`. ACs: 008.3, 008.5.
   *Pronto quando:* após `logout`, o refresh token daquele aparelho não renova mais e os de outros
   aparelhos continuam válidos.
-- [ ] **T-026** `[P]` `POST /auth/resend-code` (neutro, 1/min) e redefinição de senha
+- [x] **T-026** `[P]` `POST /auth/resend-code` (neutro, 1/min) e redefinição de senha
   (`request` neutro, `confirm` com a nova senha, encerra todas as sessões, não muda o estado)
   (D-15, D-37). ACs: 001.6, 005.3, 010.1, 010.2, 010.3, 010.4, 010.5.
   *Pronto quando:* teste de conta `AGUARDANDO_APROVACAO` redefinindo a senha e continuando no

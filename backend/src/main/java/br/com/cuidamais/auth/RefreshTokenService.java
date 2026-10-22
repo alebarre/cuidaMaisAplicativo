@@ -167,6 +167,28 @@ public class RefreshTokenService {
     }
 
     /**
+     * Encerra <strong>todas</strong> as sessões da conta, de <strong>todas</strong> as famílias
+     * (D-37, AC-010.4, T-026) — chamado por {@code password-reset/confirm} depois que a senha é
+     * trocada, já que a pessoa precisa entrar de novo em todo aparelho. Diferente de {@link
+     * #revokeDeviceByPlainToken}, que só derruba o aparelho do cookie apresentado (um aparelho,
+     * T-025): aqui não há cookie nenhum para identificar "este aparelho", é a conta inteira.
+     * {@link RefreshToken#revoke} é idempotente, então uma linha que já estivesse revogada (de um
+     * reuso detectado antes, por exemplo) não tem o {@code revokedAt} original sobrescrito.
+     *
+     * @param userId dono das sessões a encerrar
+     */
+    @Transactional
+    public void revokeAllForUser(UUID userId) {
+        // 1. busca todas as linhas da conta, de todas as famílias (D-37).
+        List<RefreshToken> todas = repository.findByUserId(userId);
+        // 2. revoga cada uma; idempotente para as que já estavam revogadas.
+        for (RefreshToken token : todas) {
+            token.revoke(clock);
+            repository.save(token);
+        }
+    }
+
+    /**
      * Revoga todas as linhas de uma família (D-11) numa transação própria (REQUIRES_NEW), para
      * que o efeito sobreviva ao rollback da transação de {@link #rotate} quando a exceção de
      * reuso é lançada depois desta chamada. {@link RefreshToken#revoke} é idempotente, então
