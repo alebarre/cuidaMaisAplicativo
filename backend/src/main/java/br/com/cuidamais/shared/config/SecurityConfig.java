@@ -1,5 +1,10 @@
 package br.com.cuidamais.shared.config;
 
+import br.com.cuidamais.auth.JwtService;
+import br.com.cuidamais.auth.UserRepository;
+import br.com.cuidamais.membership.MembershipRepository;
+import br.com.cuidamais.shared.security.JwtAuthenticationFilter;
+import java.time.Clock;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -9,9 +14,10 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
- * Segurança HTTP (T-020, primeira tarefa com endpoint real).
+ * Segurança HTTP (T-020, primeira tarefa com endpoint real; estendida pela T-024).
  */
 @Configuration
 public class SecurityConfig {
@@ -21,25 +27,40 @@ public class SecurityConfig {
      * os logins padrão do Spring Security ({@code httpBasic}, {@code formLogin}) ficam
      * desligados, inclusive para não poluir o log com o aviso de senha gerada automaticamente.
      *
-     * <p><strong>Esta cadeia libera só o necessário até a T-023</strong> ({@code /auth/signup},
-     * {@code /auth/verify-email}, {@code /auth/login}, públicas) e exige autenticação em qualquer
-     * outra rota. As tarefas seguintes desta fase (T-024 filtro completo que lê {@code status}/
-     * {@code role}/{@code is_admin} do banco) vão estender esta classe, liberando as demais rotas
-     * públicas do contrato ({@code /auth/resend-code}, {@code /auth/password-reset/*}, {@code
-     * /invitations/redeem}, {@code /invitations/register}) à medida que forem implementadas
-     * (D-32, D-16).
+     * <p><strong>Decisão de desenho (T-024)</strong>: {@code anyRequest()} é liberado com {@code
+     * permitAll()} <em>neste</em> nível — o Spring Security padrão, sem um {@code
+     * AuthenticationEntryPoint} customizado, devolveria um 403 vazio para quem não está
+     * autenticado, ANTES de qualquer controller/interceptor rodar, o que conflita com o {@code
+     * Problem} 401 que o contrato exige. A autorização de verdade (sessão válida, estado da
+     * conta, permissão de admin) passa a ser 100% responsabilidade de {@code
+     * AccountSecurityInterceptor}, que roda depois, dentro do ciclo do Spring MVC — e cujas
+     * exceções o {@code GlobalExceptionHandler} já sabe formatar como Problem Details. O {@link
+     * JwtAuthenticationFilter} (T-024) só popula o {@code SecurityContextHolder} quando consegue
+     * validar o token; ele é registrado antes do filtro padrão de autenticação do Spring Security
+     * para que o contexto já esteja pronto quando o MVC despachar para o controller.
      */
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
         return http.csrf(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
-                .authorizeHttpRequests(auth -> auth.requestMatchers(
-                                "/auth/signup", "/auth/verify-email", "/auth/login")
-                        .permitAll()
-                        .anyRequest()
-                        .authenticated())
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
+    }
+
+    /**
+     * Filtro que autentica o portador do JWT a cada requisição, consultando {@code User}/{@code
+     * Membership} no banco (D-13 rev. 2, T-024) — ver Javadoc de {@link JwtAuthenticationFilter}.
+     */
+    @Bean
+    public JwtAuthenticationFilter jwtAuthenticationFilter(
+            JwtService jwtService,
+            UserRepository userRepository,
+            MembershipRepository membershipRepository,
+            Clock clock) {
+        return new JwtAuthenticationFilter(jwtService, userRepository, membershipRepository, clock);
     }
 
     /** Mesmo mecanismo (BCrypt) usado por {@code OtpService} (D-14) para hashear a senha do usuário. */

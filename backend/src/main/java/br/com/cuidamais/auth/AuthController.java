@@ -1,5 +1,6 @@
 package br.com.cuidamais.auth;
 
+import br.com.cuidamais.shared.security.PublicEndpoint;
 import jakarta.validation.Valid;
 import java.time.Clock;
 import org.springframework.http.HttpHeaders;
@@ -44,6 +45,7 @@ public class AuthController {
      * AC-001.1, AC-001.3, AC-001.4 (D-15): sempre 202 sem corpo, exista o e-mail ou não — o
      * serviço nunca lança nada em nenhum dos dois caminhos.
      */
+    @PublicEndpoint
     @PostMapping("/signup")
     public ResponseEntity<Void> signup(@Valid @RequestBody SignupRequest request) {
         signupService.signup(request, clock);
@@ -57,6 +59,7 @@ public class AuthController {
      * mapeadas em {@code GlobalExceptionHandler} ({@link InvalidCodeException}, {@link
      * CodeExpiredOrExhaustedException}) — este método não trata nenhum dos dois casos de erro.
      */
+    @PublicEndpoint
     @PostMapping("/verify-email")
     public ResponseEntity<AccessTokenResponse> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
         VerifiedEmailSession session = verifyEmailService.verify(request.email(), request.code());
@@ -77,6 +80,7 @@ public class AuthController {
      * InvalidCredentialsException}, {@link AccountNotActiveException}) — este método não trata
      * nenhum caso de erro.
      */
+    @PublicEndpoint
     @PostMapping("/login")
     public ResponseEntity<AccessTokenResponse> login(@Valid @RequestBody LoginRequest request) {
         LoginSession session = loginService.login(request.email(), request.password());

@@ -124,7 +124,7 @@ estados e a matriz de visibilidade têm um teste por linha/célula.
   *Pronto quando:* um teste para cada `code` de `AccountStateProblem`, um para senha certa durante
   o bloqueio (recebe 401 igual), um para o e-mail único no Mailpit e um para `ATIVO` sem grupo
   entrando normalmente.
-- [ ] **T-024** Filtro de segurança que lê `status`, `role` e `is_admin` **do banco** a cada
+- [x] **T-024** Filtro de segurança que lê `status`, `role` e `is_admin` **do banco** a cada
   requisição (D-13) e aplica `x-required-account-state` e `x-required-permission` do contrato.
   ACs: 009.1, 009.2, 015.2, 015.3. *Pronto quando:* token válido de membro removido recebe 401 na
   requisição seguinte; token de Cuidador que virou Familiar já vê o novo papel sem novo login;

@@ -5,6 +5,8 @@ import br.com.cuidamais.auth.AccountStateValue;
 import br.com.cuidamais.auth.CodeExpiredOrExhaustedException;
 import br.com.cuidamais.auth.InvalidCodeException;
 import br.com.cuidamais.auth.InvalidCredentialsException;
+import br.com.cuidamais.shared.security.AccountStateException;
+import br.com.cuidamais.shared.security.UnauthorizedSessionException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
@@ -55,6 +57,8 @@ public class GlobalExceptionHandler {
     private static final URI CODE_EXPIRED_TYPE = URI.create("/problems/code-expired-or-exhausted");
     private static final URI INVALID_CREDENTIALS_TYPE = URI.create("/problems/invalid-credentials");
     private static final URI ACCOUNT_NOT_ACTIVE_TYPE = URI.create("/problems/account-not-active");
+    private static final URI UNAUTHORIZED_TYPE = URI.create("/problems/unauthorized");
+    private static final URI ACCOUNT_STATE_TYPE = URI.create("/problems/account-state");
 
     /** AC-015.3 / D-32: validação de {@code @Valid @RequestBody}. */
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -186,6 +190,40 @@ public class GlobalExceptionHandler {
         problem.setTitle("Conta não ativa");
         problem.setInstance(URI.create(request.getRequestURI()));
         problem.setProperty("code", accountStateCodeOf(exception.getState()));
+        return problemResponse(HttpStatus.FORBIDDEN, problem);
+    }
+
+    /**
+     * T-024, D-13, AC-009.2: nenhuma sessão válida para a rota autenticada chamada — token
+     * ausente, inválido, expirado, de uma conta que não existe mais, ou de uma membership que
+     * virou {@code REMOVIDO}. {@code Problem} genérico, sem {@code code} e sem nenhum dado da
+     * conta (P5): quem não tem sessão válida não deve saber qual dos motivos ocorreu.
+     */
+    @ExceptionHandler(UnauthorizedSessionException.class)
+    public ResponseEntity<ProblemDetail> handleUnauthorizedSession(
+            UnauthorizedSessionException exception, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.UNAUTHORIZED, "Sessão inválida ou expirada.");
+        problem.setType(UNAUTHORIZED_TYPE);
+        problem.setTitle("Sessão inválida");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        return problemResponse(HttpStatus.UNAUTHORIZED, problem);
+    }
+
+    /**
+     * T-024, AC-009.1: sessão válida, mas o estado atual da conta não satisfaz a exigência da
+     * rota (ex. {@code ATIVO} sem grupo numa rota que exige grupo) — {@code code: ACCOUNT_STATE},
+     * sem revelar qual é o estado de verdade (P5).
+     */
+    @ExceptionHandler(AccountStateException.class)
+    public ResponseEntity<ProblemDetail> handleAccountState(
+            AccountStateException exception, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.FORBIDDEN, "O estado atual da conta não permite esta operação.");
+        problem.setType(ACCOUNT_STATE_TYPE);
+        problem.setTitle("Estado da conta não permitido");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        problem.setProperty("code", "ACCOUNT_STATE");
         return problemResponse(HttpStatus.FORBIDDEN, problem);
     }
 
