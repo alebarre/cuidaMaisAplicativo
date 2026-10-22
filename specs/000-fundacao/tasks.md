@@ -139,7 +139,7 @@ estados e a matriz de visibilidade têm um teste por linha/célula.
   mesmo estado; refresh tokens antigos inválidos após `confirm`.
 - [x] **T-027** `[P]` `GET /me/account` devolve o estado derivado e `hasGroup` (D-33, D-20).
   ACs: 001.7, 012.1. *Pronto quando:* um teste por estado devolvido.
-- [ ] **T-028** Job de descarte de contas não confirmadas há mais de 24 h, **sem e-mail** (D-09
+- [x] **T-028** Job de descarte de contas não confirmadas há mais de 24 h, **sem e-mail** (D-09
   item 2). AC: 001.5. Depende de: T-019. *Pronto quando:* com `Clock` avançado 24 h a conta some,
   o e-mail fica livre para novo `signup` e o Mailpit não recebe nada.
 
