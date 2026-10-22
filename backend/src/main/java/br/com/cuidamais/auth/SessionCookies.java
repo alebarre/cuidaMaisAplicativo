@@ -46,4 +46,20 @@ public final class SessionCookies {
                 .path("/api/v1/auth")
                 .build();
     }
+
+    /**
+     * Monta o cookie de limpeza do logout (T-025, AC-008.5): valor vazio e {@code Max-Age=0}, para
+     * que o navegador descarte o refresh token imediatamente, com os mesmos atributos de segurança
+     * (D-12) e o mesmo {@code Path} do cookie original — um {@code Path} diferente faria o
+     * navegador tratar como um cookie novo em vez de apagar o existente.
+     */
+    public static ResponseCookie clearRefreshTokenCookie() {
+        return ResponseCookie.from(NOME_COOKIE, "")
+                .httpOnly(true)
+                .secure(true)
+                .sameSite("Strict")
+                .maxAge(Duration.ZERO)
+                .path("/api/v1/auth")
+                .build();
+    }
 }

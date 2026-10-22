@@ -116,6 +116,57 @@ public class RefreshTokenService {
     }
 
     /**
+     * Encerra a sessão de <strong>um aparelho</strong> a partir do cookie apresentado em
+     * {@code /auth/logout} (T-025, AC-008.5). Decisões do orquestrador, deliberadamente mais
+     * permissivas que {@link #rotate} porque aqui não existe reuso a detectar, só "sair":
+     *
+     * <ol>
+     *   <li>cookie nulo/vazio (ex. já tinha sido limpo) → não faz nada;
+     *   <li>hasheia e busca por {@link RefreshTokenRepository#findByTokenHash}; token desconhecido
+     *       → não faz nada (idempotente, nunca revela se o token existe, P5);
+     *   <li>token de <strong>outra conta</strong> ({@code token.getUserId()} diferente de {@code
+     *       callerUserId}) → não faz nada (quem está logado como A não derruba a sessão de B,
+     *       D-13);
+     *   <li>encontrado e da própria conta → revoga a <strong>família inteira</strong> do token
+     *       (mesma lógica de {@link #revogarFamiliaEmTransacaoIsolada}, mas aqui dentro da
+     *       transação normal deste método, sem precisar de transação isolada: não há exceção
+     *       lançada depois que pudesse desfazer a revogação). Revogar a família, não só a linha
+     *       apresentada, é o que garante que "Sair" funciona mesmo que o aparelho apresente um
+     *       token já rotacionado (antigo) daquele login — o token atual da cadeia também precisa
+     *       parar de renovar.
+     * </ol>
+     *
+     * @param plainToken valor opaco lido do cookie {@code refresh_token}; pode ser nulo/vazio
+     * @param callerUserId dono da sessão autenticada (bearer) que está chamando {@code logout}
+     */
+    @Transactional
+    public void revokeDeviceByPlainToken(String plainToken, UUID callerUserId) {
+        // 1. sem cookie, não há o que revogar.
+        if (plainToken == null || plainToken.isBlank()) {
+            return;
+        }
+
+        // 2. token desconhecido: não faz nada, idempotente.
+        var encontrado = repository.findByTokenHash(hash(plainToken));
+        if (encontrado.isEmpty()) {
+            return;
+        }
+
+        // 3. cookie de outra conta: nunca revoga a sessão de quem não é o chamador (D-13).
+        RefreshToken token = encontrado.get();
+        if (!token.getUserId().equals(callerUserId)) {
+            return;
+        }
+
+        // 4. dono confere: revoga a família inteira (não só esta linha), para que o aparelho pare
+        // de renovar mesmo que tenha apresentado um token antigo já rotacionado da mesma família.
+        for (RefreshToken daFamilia : repository.findByFamilyId(token.getFamilyId())) {
+            daFamilia.revoke(clock);
+            repository.save(daFamilia);
+        }
+    }
+
+    /**
      * Revoga todas as linhas de uma família (D-11) numa transação própria (REQUIRES_NEW), para
      * que o efeito sobreviva ao rollback da transação de {@link #rotate} quando a exceção de
      * reuso é lançada depois desta chamada. {@link RefreshToken#revoke} é idempotente, então

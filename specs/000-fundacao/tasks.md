@@ -129,7 +129,7 @@ estados e a matriz de visibilidade têm um teste por linha/célula.
   ACs: 009.1, 009.2, 015.2, 015.3. *Pronto quando:* token válido de membro removido recebe 401 na
   requisição seguinte; token de Cuidador que virou Familiar já vê o novo papel sem novo login;
   Cuidador chamando rota de admin recebe 403 `NOT_ALLOWED`.
-- [ ] **T-025** `[P]` `POST /auth/refresh` e `POST /auth/logout`. ACs: 008.3, 008.5.
+- [x] **T-025** `[P]` `POST /auth/refresh` e `POST /auth/logout`. ACs: 008.3, 008.5.
   *Pronto quando:* após `logout`, o refresh token daquele aparelho não renova mais e os de outros
   aparelhos continuam válidos.
 - [ ] **T-026** `[P]` `POST /auth/resend-code` (neutro, 1/min) e redefinição de senha
