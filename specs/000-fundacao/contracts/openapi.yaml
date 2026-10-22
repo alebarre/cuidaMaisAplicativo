@@ -110,6 +110,7 @@ paths:
             schema: { $ref: '#/components/schemas/ResendCodeRequest' }
       responses:
         '202': { $ref: '#/components/responses/AcceptedNeutral' }
+        '400': { $ref: '#/components/responses/ValidationError' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /auth/login:
@@ -133,6 +134,7 @@ paths:
             schema: { $ref: '#/components/schemas/LoginRequest' }
       responses:
         '200': { $ref: '#/components/responses/SessionStarted' }
+        '400': { $ref: '#/components/responses/ValidationError' }
         '401':
           description: E-mail ou senha inválidos (mensagem única; também durante o bloqueio de AC-008.4)
           content:
@@ -695,6 +697,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Member' }
+        '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -825,10 +828,16 @@ components:
         application/problem+json:
           schema: { $ref: '#/components/schemas/ValidationProblem' }
     InvalidCode:
-      description: Código de confirmação incorreto. Informa quantas tentativas restam (AC-005.2).
+      description: |
+        Código de confirmação incorreto, informando quantas tentativas restam (AC-005.2,
+        `InvalidCodeProblem`), ou corpo da requisição inválido (ex. e-mail malformado,
+        `ValidationProblem`) — as duas únicas formas de `400` destas rotas.
       content:
         application/problem+json:
-          schema: { $ref: '#/components/schemas/InvalidCodeProblem' }
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/ValidationProblem'
+              - $ref: '#/components/schemas/InvalidCodeProblem'
     InvalidInviteCode:
       description: |
         E-mail ou código de convite inválidos (mensagem única, exista convite ou não, AC-004.7).
@@ -1248,6 +1257,7 @@ components:
                 properties:
                   field: { type: string, example: address.zipCode }
                   message: { type: string, example: CEP deve ter 8 dígitos }
+      unevaluatedProperties: false
     InvalidCodeProblem:
       allOf:
         - $ref: '#/components/schemas/Problem'
@@ -1255,6 +1265,7 @@ components:
           required: [remainingAttempts]
           properties:
             remainingAttempts: { type: integer, minimum: 0, maximum: 4 }
+      unevaluatedProperties: false
     AccountStateProblem:
       allOf:
         - $ref: '#/components/schemas/Problem'
@@ -1264,6 +1275,7 @@ components:
             code:
               type: string
               enum: [AWAITING_EMAIL_CONFIRMATION, AWAITING_APPROVAL, REJECTED, EXPIRED, REMOVED]
+      unevaluatedProperties: false
     InviteBlockedProblem:
       allOf:
         - $ref: '#/components/schemas/Problem'
@@ -1275,6 +1287,7 @@ components:
               type: string
               format: date-time
               description: Fim do bloqueio de 30 min; o frontend mostra o contador regressivo (AC-004.7, D-41)
+      unevaluatedProperties: false
     InvitationUnavailableProblem:
       allOf:
         - $ref: '#/components/schemas/Problem'
@@ -1285,6 +1298,7 @@ components:
               type: string
               description: '`INVITATION_EXPIRED` = status VENCIDO'
               enum: [INVITATION_EXPIRED, INVITATION_CANCELLED, INVITATION_USED]
+      unevaluatedProperties: false
     InvitationConflictProblem:
       allOf:
         - $ref: '#/components/schemas/Problem'
@@ -1294,3 +1308,4 @@ components:
             code:
               type: string
               enum: [ALREADY_MEMBER, EMAIL_UNAVAILABLE, NO_ELDER]
+      unevaluatedProperties: false

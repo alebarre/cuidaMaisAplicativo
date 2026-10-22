@@ -106,40 +106,40 @@ estados e a matriz de visibilidade têm um teste por linha/célula.
 
 ## Fase 2 — API de autenticação e conta
 
-- [ ] **T-020** `POST /auth/signup` (resposta neutra 202, D-15): cria `AGUARDANDO_CONFIRMACAO_EMAIL`;
+- [x] **T-020** `POST /auth/signup` (resposta neutra 202, D-15): cria `AGUARDANDO_CONFIRMACAO_EMAIL`;
   e-mail existente não cria nada e avisa o dono. ACs: 001.1, 001.3, 001.4, 011.1, 011.2.
   *Pronto quando:* testes para cadastro novo, e-mail repetido (mesma resposta, nada criado,
   e-mail de aviso no Mailpit), senha fraca e endereço inválido.
-- [ ] **T-021** JWT de 15 min + refresh token opaco de 7 dias renovado a cada uso, com **teto
+- [x] **T-021** JWT de 15 min + refresh token opaco de 7 dias renovado a cada uso, com **teto
   absoluto de 30 dias**, rotação e detecção de reuso; cookie `HttpOnly; Secure; SameSite=Strict`
   (D-11, D-12). AC: 008.3. *Pronto quando:* testes de renovação, expiração após 7 dias sem uso,
   expiração no dia 30 mesmo com uso diário, e revogação da família no reuso.
-- [ ] **T-022** `POST /auth/verify-email` ativa a conta e abre sessão; **não cria grupo** (D-05
+- [x] **T-022** `POST /auth/verify-email` ativa a conta e abre sessão; **não cria grupo** (D-05
   rev. 2). ACs: 001.2, 005.1, 005.2. Depende de: T-021. *Pronto quando:* após confirmar, `users`
   tem `email_verified_at` e **não** existe membership.
-- [ ] **T-023** `POST /auth/login`: `401` único para e-mail inexistente, senha errada e conta
+- [x] **T-023** `POST /auth/login`: `401` único para e-mail inexistente, senha errada e conta
   bloqueada (inclusive com senha certa); bloqueio por conta após 5 erros por 15 min com **um**
   e-mail na transição; contador zera no acerto e ao fim da janela; `403` com `code` por estado só
   com senha correta (D-14, D-15, D-33). ACs: 008.1, 008.2, 008.4.
   *Pronto quando:* um teste para cada `code` de `AccountStateProblem`, um para senha certa durante
   o bloqueio (recebe 401 igual), um para o e-mail único no Mailpit e um para `ATIVO` sem grupo
   entrando normalmente.
-- [ ] **T-024** Filtro de segurança que lê `status`, `role` e `is_admin` **do banco** a cada
+- [x] **T-024** Filtro de segurança que lê `status`, `role` e `is_admin` **do banco** a cada
   requisição (D-13) e aplica `x-required-account-state` e `x-required-permission` do contrato.
   ACs: 009.1, 009.2, 015.2, 015.3. *Pronto quando:* token válido de membro removido recebe 401 na
   requisição seguinte; token de Cuidador que virou Familiar já vê o novo papel sem novo login;
   Cuidador chamando rota de admin recebe 403 `NOT_ALLOWED`.
-- [ ] **T-025** `[P]` `POST /auth/refresh` e `POST /auth/logout`. ACs: 008.3, 008.5.
+- [x] **T-025** `[P]` `POST /auth/refresh` e `POST /auth/logout`. ACs: 008.3, 008.5.
   *Pronto quando:* após `logout`, o refresh token daquele aparelho não renova mais e os de outros
   aparelhos continuam válidos.
-- [ ] **T-026** `[P]` `POST /auth/resend-code` (neutro, 1/min) e redefinição de senha
+- [x] **T-026** `[P]` `POST /auth/resend-code` (neutro, 1/min) e redefinição de senha
   (`request` neutro, `confirm` com a nova senha, encerra todas as sessões, não muda o estado)
   (D-15, D-37). ACs: 001.6, 005.3, 010.1, 010.2, 010.3, 010.4, 010.5.
   *Pronto quando:* teste de conta `AGUARDANDO_APROVACAO` redefinindo a senha e continuando no
   mesmo estado; refresh tokens antigos inválidos após `confirm`.
-- [ ] **T-027** `[P]` `GET /me/account` devolve o estado derivado e `hasGroup` (D-33, D-20).
+- [x] **T-027** `[P]` `GET /me/account` devolve o estado derivado e `hasGroup` (D-33, D-20).
   ACs: 001.7, 012.1. *Pronto quando:* um teste por estado devolvido.
-- [ ] **T-028** Job de descarte de contas não confirmadas há mais de 24 h, **sem e-mail** (D-09
+- [x] **T-028** Job de descarte de contas não confirmadas há mais de 24 h, **sem e-mail** (D-09
   item 2). AC: 001.5. Depende de: T-019. *Pronto quando:* com `Clock` avançado 24 h a conta some,
   o e-mail fica livre para novo `signup` e o Mailpit não recebe nada.
 

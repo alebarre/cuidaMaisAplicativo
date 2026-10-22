@@ -9,6 +9,7 @@ import jakarta.persistence.Table;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -65,9 +66,16 @@ public class OtpCode {
     /**
      * Emite um novo código (AC-005.1): recebe só o hash (D-04), nasce sem tentativas, não
      * consumido, com prazo de 15 min a partir de agora.
+     *
+     * <p>{@code agora} é truncado para microssegundos (T-022): {@code expires_at}/{@code
+     * last_sent_at} são colunas {@code timestamp} do PostgreSQL, que só guarda até microssegundos
+     * — sem truncar aqui, o valor em memória (nanossegundos) e o valor depois de um
+     * save/reload divergiriam por arredondamento do driver JDBC, podendo folgar o prazo de 15 min
+     * em até ~500 ns e quebrar a verificação exata do limite (AC-005.1) depois de um reload da
+     * entidade (ex. {@code VerifyEmailService}, que sempre busca o {@code OtpCode} do banco).
      */
     public static OtpCode issue(UUID userId, OtpPurpose purpose, String codeHash, Clock clock) {
-        Instant agora = clock.instant();
+        Instant agora = clock.instant().truncatedTo(ChronoUnit.MICROS);
         OtpCode otp = new OtpCode();
         otp.id = UUID.randomUUID();
         otp.userId = userId;
@@ -112,7 +120,9 @@ public class OtpCode {
      * autenticar — desde que respeitado o intervalo mínimo de 60 s desde o último envio.
      */
     public void resend(String newCodeHash, Clock clock) {
-        Instant agora = clock.instant();
+        // Mesmo truncamento de #issue: garante que expires_at/last_sent_at sobrevivam a um
+        // save/reload sem variar por arredondamento de precisão do driver JDBC (T-022).
+        Instant agora = clock.instant().truncatedTo(ChronoUnit.MICROS);
         if (agora.isBefore(lastSentAt.plus(INTERVALO_REENVIO))) {
             throw new IllegalStateException("Reenvio de OTP respeita o intervalo de 60 s (AC-005.3)");
         }
@@ -121,6 +131,28 @@ public class OtpCode {
         this.expiresAt = agora.plus(VALIDADE);
         this.lastSentAt = agora;
         this.consumedAt = null;
+    }
+
+    /**
+     * Segundos que faltam para completar o intervalo mínimo de reenvio de 60 s desde {@code
+     * lastSentAt} (AC-005.3, T-026), arredondado para cima — usado para o cabeçalho {@code
+     * Retry-After} quando {@link #resend} recusa o pedido por ter chegado antes da hora. Chamado
+     * depois que {@link #resend} já lançou {@link IllegalStateException}, quando {@code
+     * lastSentAt} ainda é o valor antigo (o método não altera nenhum campo antes de recusar).
+     *
+     * @param clock relógio injetado (D-10), nunca o relógio de sistema
+     * @return segundos restantes (nunca negativo; 0 se o prazo já tiver passado)
+     */
+    public long secondsUntilResendAllowed(Clock clock) {
+        Instant prazo = lastSentAt.plus(INTERVALO_REENVIO);
+        Duration restante = Duration.between(clock.instant(), prazo);
+        long segundos = restante.getSeconds();
+        if (restante.getNano() > 0) {
+            // Duration.getSeconds() trunca para baixo; qualquer resto de nanossegundos positivo
+            // significa que ainda falta uma fração de segundo, que arredondamos para cima.
+            segundos++;
+        }
+        return Math.max(segundos, 0);
     }
 
     public UUID getId() {

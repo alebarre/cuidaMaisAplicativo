@@ -59,7 +59,7 @@ invitations      (id, group_id → care_groups ON DELETE CASCADE, email, code_ha
 invite_code_attempts (email PK, failed_attempts, blocked_until, auto_resends, updated_at)
 otp_codes        (id, user_id → users ON DELETE CASCADE, purpose, code_hash, attempts,
                   expires_at, consumed_at, last_sent_at)
-refresh_tokens   (id, user_id → users ON DELETE CASCADE, token_hash, expires_at,
+refresh_tokens   (id, user_id → users ON DELETE CASCADE, family_id, token_hash, expires_at,
                   absolute_expires_at, revoked_at, created_at)
 
 <endereço> = address_zip_code CHAR(8), address_street, address_number, address_complement NULL,
@@ -188,6 +188,12 @@ estado**: vive em `invite_code_attempts` (D-34).
   guardado em `absolute_expires_at` e herdado na rotação (AC-008.3). O refresh token fica guardado
   como hash e é **rotacionado**: um token antigo reapresentado revoga a família inteira.
   `POST /auth/logout` revoga o refresh token do aparelho (AC-008.5).
+  **`refresh_tokens.family_id`** (rev. 3, migração `V2`) identifica a cadeia de rotação de um
+  mesmo login/aparelho: o primeiro token de um login nasce com `family_id = id` (ele mesmo); cada
+  renovação grava um token novo com o **mesmo** `family_id` do anterior. Detectar um token já
+  `revoked_at` sendo reapresentado revoga **todas** as linhas daquele `family_id` (reuso = token
+  roubado); `family_id` nunca é o `user_id`, porque revogar um aparelho (D-13, `POST
+  /auth/logout`) não deve afetar os refresh tokens de outros aparelhos do mesmo usuário.
 - **D-12** Refresh token em cookie `HttpOnly; Secure; SameSite=Strict`; access token só em
   memória no Angular. Protege contra roubo de token por XSS.
 - **D-13 (rev. 2)** O JWT **não carrega papel nem status**: o filtro de segurança consulta a

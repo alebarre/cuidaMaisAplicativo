@@ -8,6 +8,11 @@ spring:
       mail.smtp.starttls.enable: false
 
 app:
+  jwt:
+    # T-021 (D-11): só o profile de teste tem um valor fixo aqui — propositalmente óbvio como
+    # placeholder (não é um segredo real nem parece um), para o contexto Spring subir sem
+    # depender de `.env`. Nunca usado fora de `mvn test`/CI.
+    secret: teste-nao-e-segredo-de-verdade-0000000000000000000000000000000000
   jobs:
     enabled: false   # T-019 (D-09): o @Scheduled não dispara nos testes; eles chamam JobRunner.runAll() direto
 
