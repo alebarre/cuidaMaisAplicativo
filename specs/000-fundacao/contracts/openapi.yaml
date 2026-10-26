@@ -1121,6 +1121,7 @@ components:
           items: { $ref: '#/components/schemas/EmergencyContact' }
           default: []
     Elder:
+      unevaluatedProperties: false
       allOf:
         - $ref: '#/components/schemas/ElderInput'
         - type: object

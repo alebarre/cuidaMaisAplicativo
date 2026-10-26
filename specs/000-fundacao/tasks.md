@@ -147,7 +147,7 @@ estados e a matriz de visibilidade têm um teste por linha/célula.
 
 ## Fase 3 — Idoso, grupo e dados pessoais
 
-- [ ] **T-030** `POST /elders` cria **grupo + idoso + membership admin** numa transação (D-05),
+- [x] **T-030** `POST /elders` cria **grupo + idoso + membership admin** numa transação (D-05),
   só para `ATIVO` sem grupo (409 se já tem); `GET/PUT /elders/{id}` com contatos de emergência,
   limites de D-36 e sem histórico; 404 para outro grupo (D-32).
   ACs: 001.2, 002.1, 002.2, 002.3, 002.5, 002.7, 002.8, 002.9, 011.7, 015.3.

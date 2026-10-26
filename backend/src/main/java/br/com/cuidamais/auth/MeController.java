@@ -1,5 +1,7 @@
 package br.com.cuidamais.auth;
 
+import br.com.cuidamais.group.Elder;
+import br.com.cuidamais.group.ElderRepository;
 import br.com.cuidamais.membership.Membership;
 import br.com.cuidamais.membership.MembershipRepository;
 import br.com.cuidamais.shared.security.AccountStateRequirement;
@@ -21,16 +23,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class MeController {
 
     private final MembershipRepository memberships;
-    private final ElderIdLookup elderIdLookup;
+    private final ElderRepository elders;
 
     /**
      * @param memberships busca a membership da conta para achar o {@code group_id} (D-02: no
      *     máximo uma por conta)
-     * @param elderIdLookup consulta pontual do idoso do grupo (T-027; entidade completa só na T-030)
+     * @param elders busca o idoso do grupo (entidade/repositório completos desde a T-030)
      */
-    public MeController(MembershipRepository memberships, ElderIdLookup elderIdLookup) {
+    public MeController(MembershipRepository memberships, ElderRepository elders) {
         this.memberships = memberships;
-        this.elderIdLookup = elderIdLookup;
+        this.elders = elders;
     }
 
     /**
@@ -56,6 +58,6 @@ public class MeController {
         Membership membership = memberships.findByUserId(userId)
                 .orElseThrow(() -> new IllegalStateException(
                         "Conta com hasGroup=true sem membership (invariante de AccountState violada)"));
-        return elderIdLookup.findByGroupId(membership.getGroupId());
+        return elders.findByGroupId(membership.getGroupId()).map(Elder::getId).orElse(null);
     }
 }
