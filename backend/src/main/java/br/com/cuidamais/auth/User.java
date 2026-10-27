@@ -199,6 +199,21 @@ public class User {
         this.passwordHash = newPasswordHash;
     }
 
+    /**
+     * Atualiza o telefone e o endereço da conta (T-032, AC-011.6: "o membro pode alterar o
+     * próprio telefone e endereço a qualquer momento"). Como {@link #changePassword}, grava só
+     * esses dois campos, sem tocar em nome, e-mail, senha, confirmação de e-mail ou bloqueio de
+     * login — {@code name}/{@code email} não fazem parte de {@code UpdateMeRequest} e não são
+     * editáveis por este caminho.
+     *
+     * @param phone telefone novo (DDD + número, já validado por Bean Validation)
+     * @param address endereço novo (D-25, já validado por Bean Validation)
+     */
+    public void updateContactInfo(String phone, Endereco address) {
+        this.phone = phone;
+        this.address = address;
+    }
+
     /** Contador de tentativas de login erradas seguidas (D-14); zera no acerto. */
     public int getFailedLogins() {
         return failedLogins;
