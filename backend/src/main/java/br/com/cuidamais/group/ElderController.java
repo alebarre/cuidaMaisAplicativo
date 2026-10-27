@@ -10,24 +10,26 @@ import java.time.Clock;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 /**
- * Rotas de cadastro, leitura e edição do idoso (T-030, contrato tag {@code elders}). O prefixo
- * {@code /api/v1} vem do {@code server.servlet.context-path} global (application.yml), por isso
- * o mapeamento aqui é só {@code /elders} (mesmo padrão de {@code AuthController}/{@code
- * MeController}).
+ * Rotas de cadastro, leitura, edição e foto do idoso (T-030, T-031, contrato tag {@code
+ * elders}). O prefixo {@code /api/v1} vem do {@code server.servlet.context-path} global
+ * (application.yml), por isso o mapeamento aqui é só {@code /elders} (mesmo padrão de {@code
+ * AuthController}/{@code MeController}).
  *
- * <p>{@code DELETE /elders/{id}} (T-033) e {@code PUT}/{@code DELETE /elders/{id}/photo}
- * (T-031) são de tarefas futuras — propositalmente não implementadas aqui, mesmo já existindo no
- * contrato.
+ * <p>{@code DELETE /elders/{id}} (T-033, exclusão do grupo inteiro) é de tarefa futura —
+ * propositalmente não implementada aqui, mesmo já existindo no contrato.
  */
 @RestController
 @RequestMapping("/elders")
@@ -80,6 +82,48 @@ public class ElderController {
             @AuthenticationPrincipal AccountPrincipal principal) {
         ElderResponse response = elderService.updateElder(elderId, principal.userId(), request, clock);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * {@code PUT /elders/{elderId}/photo} (AC-002.6, T-031, D-30): {@code x-required-permission:
+     * admin} — só o Responsável administrador envia/substitui a foto. O formato (JPEG/PNG) e o
+     * tamanho (até 5 MB) são validados pelo serviço, não aqui (D-07).
+     */
+    @RequiresAdminPermission
+    @PutMapping("/{elderId}/photo")
+    public ResponseEntity<ElderResponse> uploadPhoto(
+            @PathVariable UUID elderId,
+            @RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal AccountPrincipal principal) {
+        ElderResponse response = elderService.uploadPhoto(elderId, principal.userId(), file, clock);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * {@code DELETE /elders/{elderId}/photo} (AC-002.6, T-031): {@code x-required-permission:
+     * admin}; idempotente — remover quando não há foto nenhuma ainda responde {@code 204} do
+     * mesmo jeito, nunca um erro.
+     */
+    @RequiresAdminPermission
+    @DeleteMapping("/{elderId}/photo")
+    public ResponseEntity<Void> deletePhoto(
+            @PathVariable UUID elderId, @AuthenticationPrincipal AccountPrincipal principal) {
+        elderService.removePhoto(elderId, principal.userId(), clock);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * {@code GET /elders/{elderId}/photo} (AC-002.3, AC-002.6, T-031): sem {@code
+     * x-required-permission} no contrato — qualquer membro ativo do grupo, inclusive Cuidador,
+     * baixa a foto, mesma visibilidade dos demais dados do idoso. Devolve os bytes crus com o
+     * {@code Content-Type} correspondente ao formato gravado ({@code image/jpeg}/{@code
+     * image/png}); idoso sem foto nenhuma ainda é {@code 404} (decidido pelo serviço).
+     */
+    @GetMapping("/{elderId}/photo")
+    public ResponseEntity<byte[]> getPhoto(
+            @PathVariable UUID elderId, @AuthenticationPrincipal AccountPrincipal principal) {
+        ElderPhotoContent photo = elderService.getPhoto(elderId, principal.userId());
+        return ResponseEntity.ok().contentType(photo.contentType()).body(photo.bytes());
     }
 
     /**

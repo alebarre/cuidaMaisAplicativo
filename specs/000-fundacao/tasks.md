@@ -154,9 +154,9 @@ estados e a matriz de visibilidade têm um teste por linha/célula.
   *Pronto quando:* após o `POST` existem exatamente um grupo, um idoso e uma membership
   `FAMILIAR` admin; segundo `POST` recebe 409; nascimento futuro e alergia de 501 caracteres
   recebem 400; Cuidador vê o endereço do idoso e dos contatos.
-- [ ] **T-031** `[P]` `PUT/DELETE /elders/{id}/photo`: JPEG/PNG até 5 MB, substitui a anterior,
+- [x] **T-031** `[P]` `PUT/DELETE /elders/{id}/photo`: JPEG/PNG até 5 MB, substitui a anterior,
   415 para outro formato, 413 acima do limite (D-30). AC: 002.6.
-- [ ] **T-032** `[P]` `GET/PUT /me`, com `membership` nulo para conta sem grupo. AC: 011.6.
+- [x] **T-032** `[P]` `GET/PUT /me`, com `membership` nulo para conta sem grupo. AC: 011.6.
 - [ ] **T-033** `DELETE /elders/{id}` exclui o grupo inteiro (D-35, D-38): coleta os e-mails,
   apaga via cascade, apaga os `users` do grupo, envia o e-mail de AC-013.3 a todos os status.
   ACs: 013.2, 013.3, 013.4, 013.5. *Pronto quando:* teste com membros `ATIVO`,

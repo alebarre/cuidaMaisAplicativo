@@ -21,7 +21,9 @@ import java.util.UUID;
  * <p>Nasce junto com o grupo em {@code POST /elders} (AC-001.2, T-030) e é só editado por
  * substituição completa em {@code PUT /elders/{id}} (AC-002.9, D-36): {@link #update} não guarda
  * nenhum histórico de versão, é um {@code UPDATE} simples dos campos atuais. A foto
- * ({@code photoPath}) é sempre {@code null} nesta tarefa — passa a ser preenchida na T-031.
+ * ({@code photoPath}) é gravada/removida por {@link #updatePhoto}/{@link #removePhoto}
+ * (AC-002.6, T-031) e guarda só o caminho do arquivo em disco — os bytes em si vivem fora do
+ * banco ({@code ElderPhotoStorage}, D-30).
  *
  * <p>Mapeada como {@code @Entity} plana sobre a tabela {@code elders} (V1__foundation.sql,
  * T-010), sem relação JPA para {@code CareGroup}/{@code EmergencyContact} (D-10, mesmo estilo de
@@ -63,7 +65,7 @@ public class Elder {
     })
     private Endereco address;
 
-    /** Única foto do idoso (AC-002.6); sempre {@code null} nesta tarefa — T-031 preenche. */
+    /** Única foto do idoso (AC-002.6); {@code null} enquanto não houver foto gravada. */
     @Column(name = "photo_path")
     private String photoPath;
 
@@ -140,6 +142,33 @@ public class Elder {
         this.updatedAt = clock.instant();
     }
 
+    /**
+     * Grava a foto enviada pelo Responsável (AC-002.6, T-031, D-30): substitui, se houver, o
+     * caminho da foto anterior — cada idoso tem no máximo uma foto, nunca um histórico delas.
+     * Quem já apagou o arquivo antigo em disco (se existia) é {@code ElderService}, antes de
+     * chamar este método; aqui só é atualizado o ponteiro guardado na entidade.
+     *
+     * @param photoPath caminho (relativo ao diretório de armazenamento, D-30) do arquivo recém
+     *     gravado
+     * @param clock relógio injetado (D-10) para o novo {@code updatedAt}
+     */
+    public void updatePhoto(String photoPath, Clock clock) {
+        this.photoPath = photoPath;
+        this.updatedAt = clock.instant();
+    }
+
+    /**
+     * Remove a foto do idoso (AC-002.6, T-031, D-30): volta {@code photoPath} a {@code null},
+     * fazendo {@code Elder.photoUrl} voltar a ser {@code null} nas respostas seguintes. Quem
+     * apaga o arquivo em disco é {@code ElderService}, antes de chamar este método.
+     *
+     * @param clock relógio injetado (D-10) para o novo {@code updatedAt}
+     */
+    public void removePhoto(Clock clock) {
+        this.photoPath = null;
+        this.updatedAt = clock.instant();
+    }
+
     /** Identificador do idoso, gerado em {@link #create}. */
     public UUID getId() {
         return id;
@@ -165,7 +194,11 @@ public class Elder {
         return address;
     }
 
-    /** Caminho da única foto do idoso; {@code null} enquanto nenhuma foto foi enviada (T-031). */
+    /**
+     * Caminho (relativo ao diretório de armazenamento, {@code ElderPhotoStorage}, D-30) da única
+     * foto do idoso; {@code null} enquanto nenhuma foto foi enviada ou depois de removida
+     * (AC-002.6, T-031).
+     */
     public String getPhotoPath() {
         return photoPath;
     }

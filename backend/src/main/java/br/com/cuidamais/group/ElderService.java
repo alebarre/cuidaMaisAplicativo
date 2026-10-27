@@ -5,41 +5,53 @@ import br.com.cuidamais.membership.Membership;
 import br.com.cuidamais.membership.MembershipRepository;
 import br.com.cuidamais.shared.Endereco;
 import br.com.cuidamais.shared.ResourceNotFoundException;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
- * Orquestra o cadastro, a leitura e a edição do idoso de um grupo (T-030, D-05 rev. 2, D-07: a
- * regra de negócio mora nas entidades — {@link CareGroup}, {@link Elder}, {@link
+ * Orquestra o cadastro, a leitura, a edição e a foto do idoso de um grupo (T-030, T-031, D-05
+ * rev. 2, D-07: a regra de negócio mora nas entidades — {@link CareGroup}, {@link Elder}, {@link
  * br.com.cuidamais.membership.Membership} — este serviço só decide <strong>quando</strong>
  * chamá-las e persiste o resultado).
  *
  * <p>Todo método é {@code @Transactional}: {@link #createElder} precisa que grupo, idoso,
  * contatos e membership nasçam juntos ou nada nasça (AC-001.2, D-05); {@link #updateElder}
  * precisa que a substituição completa dos contatos de emergência (apagar todos, recriar a lista
- * nova) seja atômica (AC-002.3, AC-002.9).
+ * nova) seja atômica (AC-002.3, AC-002.9); {@link #uploadPhoto}/{@link #removePhoto} (AC-002.6,
+ * D-30) precisam que a troca do arquivo em disco ({@link ElderPhotoStorage}) e a atualização do
+ * {@code photoPath} na entidade sejam consistentes entre si.
  */
 @Service
 public class ElderService {
+
+    /** 5 MB (D-30): a borda exata ({@code 5_242_880} bytes) é aceita, um byte a mais já é 413. */
+    private static final long MAX_PHOTO_SIZE_BYTES = 5L * 1024 * 1024;
 
     private final CareGroupRepository careGroups;
     private final ElderRepository elders;
     private final EmergencyContactRepository emergencyContacts;
     private final MembershipRepository memberships;
+    private final ElderPhotoStorage photoStorage;
 
     public ElderService(
             CareGroupRepository careGroups,
             ElderRepository elders,
             EmergencyContactRepository emergencyContacts,
-            MembershipRepository memberships) {
+            MembershipRepository memberships,
+            ElderPhotoStorage photoStorage) {
         this.careGroups = careGroups;
         this.elders = elders;
         this.emergencyContacts = emergencyContacts;
         this.memberships = memberships;
+        this.photoStorage = photoStorage;
     }
 
     /**
@@ -124,6 +136,79 @@ public class ElderService {
     }
 
     /**
+     * Envia/substitui a única foto do idoso do próprio grupo do chamador (AC-002.6, T-031,
+     * D-30): JPEG ou PNG, até 5 MB; uma nova foto sempre substitui a anterior, nunca acumula.
+     *
+     * @throws ResourceNotFoundException mesmo critério de {@link #getElder} (D-32, AC-015.3)
+     * @throws UnsupportedPhotoFormatException {@code Content-Type} fora de {@code image/jpeg}/
+     *     {@code image/png}
+     * @throws PhotoTooLargeException arquivo maior que 5 MB
+     */
+    @Transactional
+    public ElderResponse uploadPhoto(UUID elderId, UUID callerUserId, MultipartFile file, Clock clock) {
+        // 1. resolve e confere posse (mesma regra de GET/PUT).
+        Elder elder = resolveOwnElder(elderId, callerUserId);
+
+        // 2. formato: só JPEG/PNG são aceitos (D-30) -> 415 em qualquer outro caso.
+        String extension = extensionFor(file.getContentType());
+
+        // 3. tamanho: até 5 MB, borda exata inclusa (D-30) -> 413 acima disso.
+        if (file.getSize() > MAX_PHOTO_SIZE_BYTES) {
+            throw new PhotoTooLargeException();
+        }
+
+        // 4. substitui: apaga o arquivo antigo (se havia) antes de gravar o novo, mesmo trocando
+        //    JPEG<->PNG, para não deixar lixo em disco com extensão diferente da atual.
+        if (elder.getPhotoPath() != null) {
+            photoStorage.delete(elder.getPhotoPath());
+        }
+
+        // 5. grava o novo arquivo e atualiza o ponteiro guardado na entidade.
+        String photoPath = photoStorage.save(elder.getId(), readBytes(file), extension);
+        elder.updatePhoto(photoPath, clock);
+        elders.save(elder);
+
+        return ElderResponse.of(elder, emergencyContacts.findByElderIdOrderByPosition(elder.getId()));
+    }
+
+    /**
+     * Remove a foto do idoso do próprio grupo do chamador (AC-002.6, T-031): idempotente — chamar
+     * sem nenhuma foto gravada não é erro, só não faz nada (204 de qualquer forma, decidido pelo
+     * controller).
+     *
+     * @throws ResourceNotFoundException mesmo critério de {@link #getElder} (D-32, AC-015.3)
+     */
+    @Transactional
+    public ElderResponse removePhoto(UUID elderId, UUID callerUserId, Clock clock) {
+        Elder elder = resolveOwnElder(elderId, callerUserId);
+        if (elder.getPhotoPath() != null) {
+            photoStorage.delete(elder.getPhotoPath());
+            elder.removePhoto(clock);
+            elders.save(elder);
+        }
+        return ElderResponse.of(elder, emergencyContacts.findByElderIdOrderByPosition(elder.getId()));
+    }
+
+    /**
+     * Devolve os bytes da foto do idoso do próprio grupo do chamador e o {@code Content-Type}
+     * com que servi-los (AC-002.3, AC-002.6, T-031): mesma checagem de posse de {@link
+     * #getElder}; "idoso sem foto nenhuma ainda" é reportado com a mesma {@link
+     * ResourceNotFoundException} genérica (404), não um motivo diferente.
+     *
+     * @throws ResourceNotFoundException {@code elderId} de outro grupo/inexistente (D-32,
+     *     AC-015.3), ou idoso existente mas sem foto gravada
+     */
+    public ElderPhotoContent getPhoto(UUID elderId, UUID callerUserId) {
+        Elder elder = resolveOwnElder(elderId, callerUserId);
+        if (elder.getPhotoPath() == null) {
+            throw new ResourceNotFoundException();
+        }
+        byte[] bytes = photoStorage.read(elder.getPhotoPath());
+        MediaType contentType = elder.getPhotoPath().endsWith(".png") ? MediaType.IMAGE_PNG : MediaType.IMAGE_JPEG;
+        return new ElderPhotoContent(bytes, contentType);
+    }
+
+    /**
      * Resolve "o idoso do chamador" a partir da membership dele (D-02: no máximo uma por conta) e
      * confere que é exatamente o {@code elderId} pedido — a mesma checagem de posse serve tanto
      * para {@code GET} quanto para {@code PUT} (D-32, AC-015.3: outro grupo e inexistente geram o
@@ -154,6 +239,34 @@ public class ElderService {
                     elderId, c.name(), c.relationship(), c.phone(), toEndereco(c.address()), position)));
         }
         return saved;
+    }
+
+    /**
+     * Traduz o {@code Content-Type} declarado no multipart para a extensão de arquivo gravada em
+     * disco (D-30) — só {@code image/jpeg}/{@code image/png} são aceitos; qualquer outro valor
+     * (inclusive {@code null}, upload sem {@code Content-Type}) é {@code 415}.
+     */
+    private static String extensionFor(String contentType) {
+        if (MediaType.IMAGE_JPEG_VALUE.equalsIgnoreCase(contentType)) {
+            return ".jpg";
+        }
+        if (MediaType.IMAGE_PNG_VALUE.equalsIgnoreCase(contentType)) {
+            return ".png";
+        }
+        throw new UnsupportedPhotoFormatException();
+    }
+
+    /**
+     * Lê os bytes do arquivo enviado, convertendo a {@link IOException} checada (falha de I/O ao
+     * ler o multipart, não um erro de entrada do usuário) numa exceção não checada — propagada
+     * para o fallback genérico de 500 do {@code GlobalExceptionHandler}.
+     */
+    private static byte[] readBytes(MultipartFile file) {
+        try {
+            return file.getBytes();
+        } catch (IOException e) {
+            throw new UncheckedIOException("Não foi possível ler o arquivo de foto enviado.", e);
+        }
     }
 
     /** Converte o {@code AddressRequest} validado para o objeto de valor de domínio (D-25). */
