@@ -72,10 +72,16 @@ class FoundationMigrationTest extends IntegrationTest {
     void d_29_banco_recusa_cuidador_admin() {
         UUID criador = insertUser();
         UUID grupo = insertCareGroup(criador);
+        // todo care_group nasce com uma membership admin na aplicação real (D-05); sem isso o
+        // criador ficaria "ATIVO sem grupo" e seria apagado pelo job de retenção da T-034.
+        insertMembership(grupo, criador, "FAMILIAR", true);
         // controle positivo: Cuidador não-admin é aceito
         insertMembership(grupo, insertUser(), "CUIDADOR", false);
 
-        assertRecusado(() -> insertMembership(grupo, criador, "CUIDADOR", true), CHECK_VIOLATION);
+        // usuário novo (não o criador, que já tem membership): a tentativa precisa violar a CHECK,
+        // não a UNIQUE de memberships.user_id, que já dispararia antes se reusássemos o criador.
+        UUID candidatoRejeitado = insertUser();
+        assertRecusado(() -> insertMembership(grupo, candidatoRejeitado, "CUIDADOR", true), CHECK_VIOLATION);
     }
 
     // ---------------------------------------------------------------- D-02
@@ -84,8 +90,12 @@ class FoundationMigrationTest extends IntegrationTest {
     @DisplayName("D-02 (AC-003.7) banco recusa a mesma pessoa em dois grupos (memberships.user_id UNIQUE)")
     void d_02_banco_recusa_mesma_pessoa_em_dois_grupos() {
         UUID pessoa = insertUser();
-        UUID grupoA = insertCareGroup(insertUser());
-        UUID grupoB = insertCareGroup(insertUser());
+        UUID criadorA = insertUser();
+        UUID grupoA = insertCareGroup(criadorA);
+        insertMembership(grupoA, criadorA, "FAMILIAR", true); // realista: todo grupo nasce com admin (D-05)
+        UUID criadorB = insertUser();
+        UUID grupoB = insertCareGroup(criadorB);
+        insertMembership(grupoB, criadorB, "FAMILIAR", true);
         insertMembership(grupoA, pessoa, "CUIDADOR", false);
 
         assertRecusado(() -> insertMembership(grupoB, pessoa, "CUIDADOR", false), UNIQUE_VIOLATION);
@@ -103,6 +113,9 @@ class FoundationMigrationTest extends IntegrationTest {
                 .doesNotThrowAnyException();
 
         UUID grupo = insertCareGroup(criador);
+        // realista: ao menos uma das duas membresias do criador vira admin (D-05); sem isso o
+        // criador ficaria "ATIVO sem grupo" e seria apagado pelo job de retenção da T-034.
+        insertMembership(grupo, criador, "FAMILIAR", true);
 
         assertRecusado(() -> insertElder(grupo, "a".repeat(501), null,
                 "CURRENT_DATE - INTERVAL '80 years'"), STRING_DATA_RIGHT_TRUNCATION);
@@ -117,6 +130,7 @@ class FoundationMigrationTest extends IntegrationTest {
                 .doesNotThrowAnyException();
 
         UUID grupo = insertCareGroup(criador);
+        insertMembership(grupo, criador, "FAMILIAR", true); // idem ao teste de alergias acima
 
         assertRecusado(() -> insertElder(grupo, null, "c".repeat(501),
                 "CURRENT_DATE - INTERVAL '80 years'"), STRING_DATA_RIGHT_TRUNCATION);
@@ -131,6 +145,7 @@ class FoundationMigrationTest extends IntegrationTest {
                 .doesNotThrowAnyException();
 
         UUID grupo = insertCareGroup(criador);
+        insertMembership(grupo, criador, "FAMILIAR", true); // idem ao teste de alergias acima
 
         assertRecusado(() -> insertElder(grupo, null, null, "CURRENT_DATE + 1"), CHECK_VIOLATION);
     }
@@ -140,7 +155,9 @@ class FoundationMigrationTest extends IntegrationTest {
     @Test
     @DisplayName("AC-002.1 banco recusa segundo idoso no mesmo grupo (elders.group_id UNIQUE)")
     void ac_002_1_banco_recusa_segundo_idoso_no_mesmo_grupo() {
-        UUID grupo = insertCareGroup(insertUser());
+        UUID criador = insertUser();
+        UUID grupo = insertCareGroup(criador);
+        insertMembership(grupo, criador, "FAMILIAR", true); // realista: todo grupo nasce com admin (D-05)
         insertElder(grupo, null, null, "CURRENT_DATE - INTERVAL '80 years'");
 
         assertRecusado(() -> insertElder(grupo, null, null, "CURRENT_DATE - INTERVAL '70 years'"),
