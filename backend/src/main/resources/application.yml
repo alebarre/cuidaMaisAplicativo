@@ -36,6 +36,16 @@ spring:
   jackson:
     time-zone: America/Sao_Paulo   # exibição (Constitution §5); armazenamento em UTC
 
+  servlet:
+    multipart:
+      # T-031 (D-30): maior que o limite de negócio de 5 MB de propósito — o 413 "oficial" é
+      # decidido pelo ElderService (PhotoTooLargeException, corpo Problem), não por este limite
+      # genérico do Spring (que devolveria um erro sem o formato certo antes de chegar ao
+      # controller). Este valor só existe como rede de segurança (GlobalExceptionHandler) contra
+      # um upload absurdamente grande.
+      max-file-size: 6MB
+      max-request-size: 6MB
+
 server:
   port: ${SERVER_PORT:8080}
   servlet:
@@ -46,6 +56,12 @@ server:
 app:
   mail:
     from: ${MAIL_FROM:Cuida+ <nao-responda@cuidamais.local>}
+  storage:
+    # T-031 (D-30): diretório onde cada foto de idoso é gravada como um arquivo próprio
+    # ({@code ElderPhotoStorage}); o banco guarda só o caminho, nunca os bytes. Não é segredo,
+    # só um caminho de disco — ainda assim configurável por ambiente (ex. um volume montado em
+    # produção), nunca fixo no código.
+    elder-photos-dir: ${ELDER_PHOTOS_DIR:./data/elder-photos}
   jwt:
     # T-021 (D-11): segredo HMAC do access token (HS256, mínimo 32 bytes). Sem valor padrão aqui
     # de propósito (regra do projeto: nenhum segredo, nem "só de dev", fica commitado) — dev usa

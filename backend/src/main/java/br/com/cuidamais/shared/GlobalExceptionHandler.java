@@ -6,6 +6,9 @@ import br.com.cuidamais.auth.CodeExpiredOrExhaustedException;
 import br.com.cuidamais.auth.InvalidCodeException;
 import br.com.cuidamais.auth.InvalidCredentialsException;
 import br.com.cuidamais.auth.TooManyRequestsException;
+import br.com.cuidamais.group.GroupAlreadyExistsException;
+import br.com.cuidamais.group.PhotoTooLargeException;
+import br.com.cuidamais.group.UnsupportedPhotoFormatException;
 import br.com.cuidamais.shared.security.AccountStateException;
 import br.com.cuidamais.shared.security.UnauthorizedSessionException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,11 +24,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 /**
  * Tratamento global de erros em Problem Details (RFC 9457, T-007; plan D-32, D-40; Constitution
@@ -62,6 +67,10 @@ public class GlobalExceptionHandler {
     private static final URI UNAUTHORIZED_TYPE = URI.create("/problems/unauthorized");
     private static final URI ACCOUNT_STATE_TYPE = URI.create("/problems/account-state");
     private static final URI TOO_MANY_REQUESTS_TYPE = URI.create("/problems/too-many-requests");
+    private static final URI GROUP_ALREADY_EXISTS_TYPE = URI.create("/problems/group-already-exists");
+    private static final URI PHOTO_TOO_LARGE_TYPE = URI.create("/problems/photo-too-large");
+    private static final URI UNSUPPORTED_PHOTO_FORMAT_TYPE =
+            URI.create("/problems/unsupported-photo-format");
 
     /** AC-015.3 / D-32: validação de {@code @Valid @RequestBody}. */
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -87,6 +96,24 @@ public class GlobalExceptionHandler {
                     return fieldError(field == null ? "parâmetro" : field, message);
                 })
                 .toList();
+        return validationProblem(errors, request);
+    }
+
+    /**
+     * T-030, AC-002.7: corpo que não desserializa (JSON malformado, enum fora do domínio ou —
+     * o caso real que motivou este handler — uma data sintaticamente ISO mas inexistente no
+     * calendário, ex. {@code "2024-02-30"}, que o Jackson recusa antes de qualquer validação de
+     * Bean Validation rodar). Sem este handler a exceção cairia no fallback genérico de {@code
+     * Exception} e viraria 500, violando a regra geral do projeto de nunca deixar erro de entrada
+     * do usuário se tornar erro interno (P5). Não há como extrair com segurança qual campo exato
+     * falhou a partir desta exceção, então o erro é reportado de forma genérica (campo {@code
+     * "body"}) — ainda assim um 400 com {@code ValidationProblem}, nunca um 500.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ProblemDetail> handleMalformedBody(
+            HttpMessageNotReadableException exception, HttpServletRequest request) {
+        List<Map<String, String>> errors =
+                List.of(fieldError("body", "Corpo da requisição mal formado ou com data inválida."));
         return validationProblem(errors, request);
     }
 
@@ -123,6 +150,72 @@ public class GlobalExceptionHandler {
         problem.setTitle("Recurso não encontrado");
         problem.setInstance(URI.create(request.getRequestURI()));
         return problemResponse(HttpStatus.NOT_FOUND, problem);
+    }
+
+    /**
+     * T-030, AC-002.1/D-02: a conta que chamou {@code POST /elders} já é Responsável de um
+     * grupo. {@code Problem} genérico, sem {@code code} (mesmo padrão de {@link
+     * ResourceNotFoundException}) — o motivo já é evidente pelo contexto da própria chamada.
+     */
+    @ExceptionHandler(GroupAlreadyExistsException.class)
+    public ResponseEntity<ProblemDetail> handleGroupAlreadyExists(
+            GroupAlreadyExistsException exception, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT, "A conta já pertence a um grupo de cuidado.");
+        problem.setType(GROUP_ALREADY_EXISTS_TYPE);
+        problem.setTitle("Grupo já existe");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        return problemResponse(HttpStatus.CONFLICT, problem);
+    }
+
+    /**
+     * T-031, AC-002.6/D-30: upload de foto do idoso ({@code PUT /elders/{id}/photo}) maior que o
+     * limite de 5 MB decidido pela regra de negócio ({@code ElderService}). {@code Problem}
+     * genérico, sem {@code code} (mesmo padrão de {@link GroupAlreadyExistsException}).
+     */
+    @ExceptionHandler(PhotoTooLargeException.class)
+    public ResponseEntity<ProblemDetail> handlePhotoTooLarge(
+            PhotoTooLargeException exception, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.PAYLOAD_TOO_LARGE, "O arquivo enviado é maior que o limite permitido.");
+        problem.setType(PHOTO_TOO_LARGE_TYPE);
+        problem.setTitle("Arquivo muito grande");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        return problemResponse(HttpStatus.PAYLOAD_TOO_LARGE, problem);
+    }
+
+    /**
+     * T-031, AC-002.6/D-30: upload de foto do idoso com {@code Content-Type} diferente de
+     * {@code image/jpeg}/{@code image/png}. {@code Problem} genérico, sem {@code code}.
+     */
+    @ExceptionHandler(UnsupportedPhotoFormatException.class)
+    public ResponseEntity<ProblemDetail> handleUnsupportedPhotoFormat(
+            UnsupportedPhotoFormatException exception, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Envie um arquivo JPEG ou PNG.");
+        problem.setType(UNSUPPORTED_PHOTO_FORMAT_TYPE);
+        problem.setTitle("Formato não suportado");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        return problemResponse(HttpStatus.UNSUPPORTED_MEDIA_TYPE, problem);
+    }
+
+    /**
+     * T-031, D-30: rede de segurança para um upload absurdamente grande que nem o limite do
+     * Spring ({@code spring.servlet.multipart.max-file-size}, maior que 5 MB de propósito —
+     * application.yml) deixaria passar, antes mesmo de {@code ElderService} decidir o 413 de
+     * negócio. Sem este handler, {@code MaxUploadSizeExceededException} cairia no fallback
+     * genérico de {@link Exception} e viraria {@code 500} em vez do {@code 413} que o contrato
+     * documenta.
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ProblemDetail> handleMaxUploadSizeExceeded(
+            MaxUploadSizeExceededException exception, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.PAYLOAD_TOO_LARGE, "O arquivo enviado é maior que o limite permitido.");
+        problem.setType(PHOTO_TOO_LARGE_TYPE);
+        problem.setTitle("Arquivo muito grande");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        return problemResponse(HttpStatus.PAYLOAD_TOO_LARGE, problem);
     }
 
     /**

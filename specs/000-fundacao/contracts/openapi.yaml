@@ -447,6 +447,26 @@ paths:
   /elders/{elderId}/photo:
     parameters:
       - $ref: '#/components/parameters/ElderId'
+    get:
+      tags: [elders]
+      operationId: getElderPhoto
+      summary: Baixar a foto do idoso (qualquer membro ativo)
+      description: |
+        Bytes da imagem que `Elder.photoUrl` aponta — descoberta no contrato ao implementar a
+        T-031: sem este `GET`, `photoUrl` não tinha como ser servido (D-30). Visível a qualquer
+        membro ativo do grupo, mesma visibilidade dos demais dados do idoso (AC-002.3).
+      x-acceptance-criteria: [AC-002.6, AC-002.3]
+      x-decisions: [D-30]
+      responses:
+        '200':
+          description: Bytes da imagem
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/png:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
     put:
       tags: [elders]
       operationId: uploadElderPhoto
@@ -1121,13 +1141,14 @@ components:
           items: { $ref: '#/components/schemas/EmergencyContact' }
           default: []
     Elder:
+      unevaluatedProperties: false
       allOf:
         - $ref: '#/components/schemas/ElderInput'
         - type: object
           required: [id, emergencyContacts, updatedAt]
           properties:
             id: { type: string, format: uuid }
-            photoUrl: { type: [string, 'null'], format: uri, description: Única foto do idoso (AC-002.6) }
+            photoUrl: { type: [string, 'null'], format: uri, description: 'Única foto do idoso (AC-002.6); quando não null, é a URL de GET /elders/{elderId}/photo' }
             updatedAt: { type: string, format: date-time }
 
     # ───────── invitations ─────────

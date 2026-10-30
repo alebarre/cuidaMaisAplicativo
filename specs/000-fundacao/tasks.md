@@ -147,23 +147,23 @@ estados e a matriz de visibilidade têm um teste por linha/célula.
 
 ## Fase 3 — Idoso, grupo e dados pessoais
 
-- [ ] **T-030** `POST /elders` cria **grupo + idoso + membership admin** numa transação (D-05),
+- [x] **T-030** `POST /elders` cria **grupo + idoso + membership admin** numa transação (D-05),
   só para `ATIVO` sem grupo (409 se já tem); `GET/PUT /elders/{id}` com contatos de emergência,
   limites de D-36 e sem histórico; 404 para outro grupo (D-32).
   ACs: 001.2, 002.1, 002.2, 002.3, 002.5, 002.7, 002.8, 002.9, 011.7, 015.3.
   *Pronto quando:* após o `POST` existem exatamente um grupo, um idoso e uma membership
   `FAMILIAR` admin; segundo `POST` recebe 409; nascimento futuro e alergia de 501 caracteres
   recebem 400; Cuidador vê o endereço do idoso e dos contatos.
-- [ ] **T-031** `[P]` `PUT/DELETE /elders/{id}/photo`: JPEG/PNG até 5 MB, substitui a anterior,
+- [x] **T-031** `[P]` `PUT/DELETE /elders/{id}/photo`: JPEG/PNG até 5 MB, substitui a anterior,
   415 para outro formato, 413 acima do limite (D-30). AC: 002.6.
-- [ ] **T-032** `[P]` `GET/PUT /me`, com `membership` nulo para conta sem grupo. AC: 011.6.
-- [ ] **T-033** `DELETE /elders/{id}` exclui o grupo inteiro (D-35, D-38): coleta os e-mails,
+- [x] **T-032** `[P]` `GET/PUT /me`, com `membership` nulo para conta sem grupo. AC: 011.6.
+- [x] **T-033** `DELETE /elders/{id}` exclui o grupo inteiro (D-35, D-38): coleta os e-mails,
   apaga via cascade, apaga os `users` do grupo, envia o e-mail de AC-013.3 a todos os status.
   ACs: 013.2, 013.3, 013.4, 013.5. *Pronto quando:* teste com membros `ATIVO`,
   `AGUARDANDO_APROVACAO`, `RECUSADO` e `REMOVIDO` prova que todas as linhas somem, todos recebem
   e-mail no Mailpit, o token do Responsável recebe 401 em seguida e os e-mails podem fazer
   `signup` de novo; membro comum chamando recebe 403.
-- [ ] **T-034** `[P]` Job de retenção de conta `ATIVO` sem grupo: lembrete aos 23 dias, exclusão
+- [x] **T-034** `[P]` Job de retenção de conta `ATIVO` sem grupo: lembrete aos 23 dias, exclusão
   aos 30 com e-mail curto (D-09 item 3). AC: 014.3. Depende de: T-019.
   *Pronto quando:* com `Clock` avançado 23 e 30 dias, os dois e-mails chegam e a conta some.
 

@@ -89,6 +89,16 @@ public class User {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    /**
+     * Quando o lembrete de "conclua o cadastro do idoso" foi enviado (T-034, AC-014.3); {@code
+     * null} enquanto nunca foi enviado. A coluna já existe desde {@code V1__foundation.sql}
+     * (T-010); esta classe só passa a mapeá-la aqui porque só a partir da T-034 alguém grava ou lê
+     * este campo — evita que {@code RetencaoContaSemGrupoRoutine} reenvie o mesmo lembrete numa
+     * rodada seguinte do job.
+     */
+    @Column(name = "elder_reminder_sent_at")
+    private Instant elderReminderSentAt;
+
     /** Exigido pelo Hibernate. */
     protected User() {}
 
@@ -131,6 +141,7 @@ public class User {
         user.lockedUntil = null;
         user.lockNotifiedAt = null;
         user.createdAt = clock.instant();
+        user.elderReminderSentAt = null;
         return user;
     }
 
@@ -199,6 +210,21 @@ public class User {
         this.passwordHash = newPasswordHash;
     }
 
+    /**
+     * Atualiza o telefone e o endereço da conta (T-032, AC-011.6: "o membro pode alterar o
+     * próprio telefone e endereço a qualquer momento"). Como {@link #changePassword}, grava só
+     * esses dois campos, sem tocar em nome, e-mail, senha, confirmação de e-mail ou bloqueio de
+     * login — {@code name}/{@code email} não fazem parte de {@code UpdateMeRequest} e não são
+     * editáveis por este caminho.
+     *
+     * @param phone telefone novo (DDD + número, já validado por Bean Validation)
+     * @param address endereço novo (D-25, já validado por Bean Validation)
+     */
+    public void updateContactInfo(String phone, Endereco address) {
+        this.phone = phone;
+        this.address = address;
+    }
+
     /** Contador de tentativas de login erradas seguidas (D-14); zera no acerto. */
     public int getFailedLogins() {
         return failedLogins;
@@ -217,6 +243,27 @@ public class User {
     /** Quando a conta foi criada. */
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    /**
+     * {@code null} enquanto o lembrete de "conclua o cadastro do idoso" nunca foi enviado
+     * (AC-014.3). {@code RetencaoContaSemGrupoRoutine} usa este campo para não reenviar o mesmo
+     * lembrete numa rodada seguinte do job, depois de já ter marcado com {@link
+     * #markElderReminderSent}.
+     */
+    public Instant getElderReminderSentAt() {
+        return elderReminderSentAt;
+    }
+
+    /**
+     * Marca que o lembrete de conclusão de cadastro já foi enviado agora (AC-014.3,
+     * {@code RetencaoContaSemGrupoRoutine}), para que a consulta da rotina pare de reivindicar
+     * esta conta para o lembrete em rodadas seguintes — só a exclusão aos 30 dias ainda se aplica.
+     *
+     * @param clock relógio injetado (D-10), nunca o relógio de sistema
+     */
+    public void markElderReminderSent(Clock clock) {
+        this.elderReminderSentAt = clock.instant();
     }
 
     /**

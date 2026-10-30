@@ -249,9 +249,13 @@ estado**: vive em `invite_code_attempts` (D-34).
   com código conferido → `410 Gone` com `code` próprio (AC-004.5).
 - **D-17** "Notificação no app" (AC-006.1) no MVP = o Angular consulta `pending-count` ao abrir e
   a cada 60 segundos com o app em primeiro plano. Push fica fora do MVP (Constitution §8).
-- **D-30** *(descoberta no contrato)* A foto do idoso tem endpoint próprio `multipart`
-  (`PUT /elders/{elderId}/photo`, JPEG/PNG até 5 MB), separado do JSON do idoso. No MVP o arquivo
-  fica em disco/volume local; trocar por armazenamento de objetos depois não muda o contrato.
+- **D-30** *(descoberta no contrato; rev. 2 na T-031)* A foto do idoso tem endpoint próprio
+  `multipart` (`PUT /elders/{elderId}/photo`, JPEG/PNG até 5 MB), separado do JSON do idoso. No
+  MVP o arquivo fica em disco/volume local; trocar por armazenamento de objetos depois não muda o
+  contrato. **rev. 2:** `Elder.photoUrl` só podia existir se houvesse uma forma de baixar a foto —
+  faltava no contrato original; acrescentado `GET /elders/{elderId}/photo` (bytes da imagem,
+  qualquer membro ativo, mesma visibilidade dos demais dados do idoso, AC-002.3) devolvendo
+  exatamente a URL que `photoUrl` aponta.
 - **D-31 (rev. 2)** `POST /invitations` com e-mail que já tem convite `ENVIADO` **cancela o
   anterior e cria outro** (AC-003.12). Com e-mail membro `ATIVO` ou `AGUARDANDO_APROVACAO` do
   grupo → `409` com a mensagem de AC-003.5. Com e-mail de outro grupo ou de conta sem grupo →
