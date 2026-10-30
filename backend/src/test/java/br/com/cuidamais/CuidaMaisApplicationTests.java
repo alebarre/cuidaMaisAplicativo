@@ -2,9 +2,9 @@ package br.com.cuidamais;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import br.com.cuidamais.shared.testsupport.IntegrationTest;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
-import br.com.cuidamais.shared.testsupport.IntegrationTest;
 
 /**
  * T-002 "Pronto quando": o contexto sobe com Web, JPA, Security, Validation, Flyway e Mail

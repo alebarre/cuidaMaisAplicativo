@@ -1,8 +1,8 @@
 package br.com.cuidamais.shared.config;
 
-import br.com.cuidamais.auth.JwtService;
-import br.com.cuidamais.auth.UserRepository;
-import br.com.cuidamais.membership.MembershipRepository;
+import br.com.cuidamais.auth.repository.UserRepository;
+import br.com.cuidamais.auth.service.JwtService;
+import br.com.cuidamais.membership.repository.MembershipRepository;
 import br.com.cuidamais.shared.security.JwtAuthenticationFilter;
 import java.time.Clock;
 import org.springframework.context.annotation.Bean;

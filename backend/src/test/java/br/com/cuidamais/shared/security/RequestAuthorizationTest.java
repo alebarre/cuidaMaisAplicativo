@@ -5,15 +5,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import br.com.cuidamais.auth.AccountPrincipal;
-import br.com.cuidamais.auth.JwtService;
-import br.com.cuidamais.auth.User;
-import br.com.cuidamais.auth.UserRepository;
-import br.com.cuidamais.membership.Membership;
-import br.com.cuidamais.membership.MembershipRepository;
-import br.com.cuidamais.membership.MembershipStatus;
-import br.com.cuidamais.membership.Role;
-import br.com.cuidamais.shared.Endereco;
+import br.com.cuidamais.auth.domain.AccountPrincipal;
+import br.com.cuidamais.auth.domain.User;
+import br.com.cuidamais.auth.repository.UserRepository;
+import br.com.cuidamais.auth.service.JwtService;
+import br.com.cuidamais.membership.domain.Membership;
+import br.com.cuidamais.membership.domain.MembershipStatus;
+import br.com.cuidamais.membership.domain.Role;
+import br.com.cuidamais.membership.repository.MembershipRepository;
+import br.com.cuidamais.shared.domain.Endereco;
 import br.com.cuidamais.shared.testsupport.ContractSchemas;
 import br.com.cuidamais.shared.testsupport.IntegrationTest;
 import br.com.cuidamais.shared.testsupport.MutableClock;
@@ -71,7 +71,7 @@ import org.springframework.web.bind.annotation.RestController;
  * <p><strong>Desenho esperado</strong> (a ser criado pelo implementador):
  *
  * <ul>
- *   <li>{@code br.com.cuidamais.auth.AccountPrincipal} — {@code record AccountPrincipal(UUID
+ *   <li>{@code br.com.cuidamais.auth.domain.AccountPrincipal} — {@code record AccountPrincipal(UUID
  *       userId, AccountState state)}; é o {@code Authentication#getPrincipal()} populado pelo
  *       filtro, resolvível por {@code @AuthenticationPrincipal}.
  *   <li>Filtro ({@code OncePerRequestFilter}) que lê {@code Authorization: Bearer <token>}, valida
