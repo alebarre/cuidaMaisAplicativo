@@ -10,6 +10,8 @@ estilo do código.
 ## Entradas
 - A tarefa `T-xxx` do `tasks.md`
 - A spec, o plan, o contrato e a constitution da feature
+- `.claude/rules/backend-java-spring.md`: além dos ACs, reprove se houver classe solta na raiz de
+  um domínio, classe no subpacote errado ou teste fora do pacote espelhado
 - O diff ou os arquivos alterados
 
 ## O que fazer

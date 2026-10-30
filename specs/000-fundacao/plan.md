@@ -5,6 +5,7 @@
 - **Status:** rev. 2, revisado contra a spec rev. 17; **aprovado por Alexandre em 2026-09-25**
 - **Histórico:** rev. 1 escrita para a spec rev. 9 (D-01 a D-32); rev. 2 atualiza D-02, D-05, D-07,
   D-09, D-11, D-13, D-14, D-15, D-16, D-20, D-27, D-28, D-31, D-32 e acrescenta D-33 a D-42.
+  D-01 rev. 3 (2026-10-29): subpacotes por papel dentro de cada domínio.
 
 > Aqui entram as decisões técnicas. Cada decisão importante tem um ID (`D-xx`) e indica
 > quais critérios de aceite (`AC-xxx`) atende. Decisões alteradas na rev. 2 trazem a marca
@@ -25,19 +26,26 @@
 | Testcontainers | 2.0.5 (BOM no `pom.xml`; o Boot 4 não gerencia mais a versão; módulos `testcontainers-postgresql`, `testcontainers-junit-jupiter`) |
 | Spring Boot (exato) | 4.1.1 · JDK Temurin 25.0.4.1 |
 
-## 2. Estrutura do backend (pacotes por domínio)
+## 2. Estrutura do backend (pacotes por domínio, camadas dentro)
 
 ```
 backend/src/main/java/br/com/cuidamais/
-├── shared/        (erros Problem Details, relógio, config, catálogo de mensagens)
+├── shared/        (config, security, jobs, exception [Problem Details], domain [Endereco])
 ├── auth/          (login, tokens, OTP, redefinição de senha, bloqueio de senha)
 ├── group/         (grupo de cuidado, idoso, exclusão do grupo)
 ├── membership/    (membros, convites, tentativas de código, aprovação, retenção)
 └── notification/  (envio de e-mails)
+    └── cada domínio: controller/ service/ repository/ domain/ dto/ exception/ job/ config/
+        (event/ listener/ em notification; util/ em auth) — só os subpacotes que tiverem conteúdo
 ```
 
-**D-01** Organização por domínio (e não por camada `controller/service/repository`), para que cada
-feature futura (001–008) seja um pacote novo e isolado.
+**D-01 (rev. 3)** Organização por domínio no primeiro nível, para que cada feature futura
+(001–008) seja um pacote novo e isolado, e **por papel (camada) dentro de cada domínio**
+(`controller`, `service`, `repository`, `domain`, `dto`, `exception`, `job`…), sem classes soltas
+na raiz do domínio. Regra detalhada e vinculante em `.claude/rules/backend-java-spring.md`.
+*Rev. 3 (2026-10-29, a pedido de Alexandre):* a rev. 1/2 dizia "por domínio e não por camada"; o
+resultado foi pacotes planos (ex. `auth/` com ~45 arquivos). Refatoração só de estrutura, sem
+mudança de comportamento (874 testes verdes antes e depois).
 
 ## 3. Modelo de dados
 

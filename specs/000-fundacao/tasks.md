@@ -30,7 +30,7 @@
   *Pronto quando:* `docker compose up` sobe os dois e a UI do Mailpit abre em `localhost:8025`.
 - [x] **T-002** Backend Spring Boot 4.1 / Java 25 (Maven): Web, Data JPA, Security, Validation,
   Flyway, Mail, PostgreSQL. Profiles `dev`, `test`, `prod`; bean `Clock` (D-10); pacotes por
-  domínio (D-01). *Pronto quando:* `mvn verify` passa com um teste de contexto.
+  domínio e papel (D-01 rev. 3). *Pronto quando:* `mvn verify` passa com um teste de contexto.
 - [x] **T-003** Base de teste de integração com Testcontainers (PostgreSQL + Mailpit) reutilizável
   por todas as classes de teste, com `Clock` substituível para avançar o tempo (D-10).
   *Pronto quando:* um teste sobe os containers, roda uma migração vazia e avança o relógio.

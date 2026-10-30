@@ -28,6 +28,12 @@ Este projeto segue **Spec-Driven Development**. A fonte da verdade são os docum
   confira o conteúdo de arquivos de configuração novos/alterados por esse motivo, mesmo que o
   nome do arquivo pareça inofensivo.
 
+## Regras (`.claude/rules/`)
+
+- `rules/backend-java-spring.md` — estrutura de pacotes (domínio → `controller/service/repository/
+  domain/dto/exception/job…`), dependências, nomes e testes espelhados. **Vale para todo código em
+  `backend/`**; leia antes de criar/mover qualquer classe. Build: JDK 25 + Maven (ver a rule).
+
 ## Agentes (`.claude/agents/`)
 
 Fluxo por tarefa: **autor-testes → implementador-backend / implementador-frontend → verificador**.

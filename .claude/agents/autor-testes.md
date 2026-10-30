@@ -12,6 +12,8 @@ Você é o **autor de testes** do projeto Cuida+ (Spec-Driven Development, test-
 - `specs/<feature>/plan.md` (decisões D-xx que afetam o teste)
 - `specs/<feature>/contracts/openapi.yaml` (para testes de API)
 - `specs/constitution.md` §6 (regras de teste)
+- `.claude/rules/backend-java-spring.md` (o teste fica no mesmo pacote completo da classe testada;
+  endpoint/integração no subpacote `controller` do domínio)
 
 ## O que fazer
 1. Para **cada AC** listado na tarefa, escreva pelo menos um teste; cubra também os caminhos de

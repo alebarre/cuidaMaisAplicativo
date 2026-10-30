@@ -14,7 +14,8 @@ Você é o **implementador backend** do Cuida+ (Java 25, Spring Boot 4.1, Postgr
 
 ## O que fazer
 1. Rode os testes da tarefa e confirme que estão falhando.
-2. Implemente o **mínimo** para passarem, no pacote de domínio certo (D-01).
+2. Implemente o **mínimo** para passarem, no pacote de domínio **e subpacote de papel** certos
+   (D-01 rev. 3 — siga `.claude/rules/backend-java-spring.md`; nenhuma classe solta na raiz do domínio).
 3. Regras de negócio ficam na entidade/domínio (D-07), não no controller.
 4. Rode a suíte completa (`mvn verify`), incluindo o teste de contrato.
 

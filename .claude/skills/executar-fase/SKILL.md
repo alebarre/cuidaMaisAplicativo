@@ -64,6 +64,7 @@ Antes de escrever qualquer prompt de agente, leia você mesmo:
 - o texto exato da tarefa em `tasks.md` (incluindo `ACs:` e `Pronto quando:`);
 - os ACs citados em `specs/000-fundacao/spec.md`;
 - as decisões `D-xx` citadas em `specs/000-fundacao/plan.md`;
+- `.claude/rules/backend-java-spring.md` (estrutura de pacotes — cite-a nos prompts de backend);
 - o código/testes já existentes que a tarefa vai estender ou reaproveitar (ex. entidades
   anteriores do mesmo pacote, bases de teste em `shared/testsupport/`, contrato em
   `contracts/openapi.yaml` quando a tarefa expõe endpoint).
