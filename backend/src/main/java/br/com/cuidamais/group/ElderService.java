@@ -1,8 +1,11 @@
 package br.com.cuidamais.group;
 
 import br.com.cuidamais.auth.AddressRequest;
+import br.com.cuidamais.auth.User;
+import br.com.cuidamais.auth.UserRepository;
 import br.com.cuidamais.membership.Membership;
 import br.com.cuidamais.membership.MembershipRepository;
+import br.com.cuidamais.notification.GroupDeletedEmail;
 import br.com.cuidamais.shared.Endereco;
 import br.com.cuidamais.shared.ResourceNotFoundException;
 import java.io.IOException;
@@ -11,6 +14,7 @@ import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,18 +44,24 @@ public class ElderService {
     private final EmergencyContactRepository emergencyContacts;
     private final MembershipRepository memberships;
     private final ElderPhotoStorage photoStorage;
+    private final UserRepository users;
+    private final ApplicationEventPublisher events;
 
     public ElderService(
             CareGroupRepository careGroups,
             ElderRepository elders,
             EmergencyContactRepository emergencyContacts,
             MembershipRepository memberships,
-            ElderPhotoStorage photoStorage) {
+            ElderPhotoStorage photoStorage,
+            UserRepository users,
+            ApplicationEventPublisher events) {
         this.careGroups = careGroups;
         this.elders = elders;
         this.emergencyContacts = emergencyContacts;
         this.memberships = memberships;
         this.photoStorage = photoStorage;
+        this.users = users;
+        this.events = events;
     }
 
     /**
@@ -206,6 +216,59 @@ public class ElderService {
         byte[] bytes = photoStorage.read(elder.getPhotoPath());
         MediaType contentType = elder.getPhotoPath().endsWith(".png") ? MediaType.IMAGE_PNG : MediaType.IMAGE_JPEG;
         return new ElderPhotoContent(bytes, contentType);
+    }
+
+    /**
+     * Exclui o grupo de cuidado inteiro do idoso informado (T-033, AC-013.2, AC-013.3, AC-013.4,
+     * AC-013.5, D-38): apagamento físico — idoso, contatos de emergência, memberships (qualquer
+     * status) e todas as contas do grupo, inclusive a do Responsável; depois, dispara o e-mail de
+     * aviso de AC-013.3 para quem tinha conta ali. Só o Responsável administrador chega até aqui
+     * ({@code x-required-permission: admin}, checado pelo controller) — um membro comum nunca
+     * exclui a própria conta.
+     *
+     * @throws ResourceNotFoundException mesmo critério de posse de {@link #getElder} (D-32,
+     *     AC-015.3): idoso de outro grupo ou inexistente é 404 genérico
+     */
+    @Transactional
+    public void deleteCareGroup(UUID elderId, UUID callerUserId) {
+        // 1. resolve e confere posse (mesma regra de GET/PUT/foto).
+        Elder elder = resolveOwnElder(elderId, callerUserId);
+
+        // 2. todas as memberships do grupo, em qualquer status — não só a do chamador.
+        List<Membership> groupMemberships = memberships.findByGroupId(elder.getGroupId());
+
+        // 3. coleta o User e o e-mail de cada membership: essa lista alimenta tanto o apagamento
+        //    dos users (passo 6) quanto os e-mails de aviso (passo 7).
+        List<User> groupUsers = new ArrayList<>(groupMemberships.size());
+        List<String> emails = new ArrayList<>(groupMemberships.size());
+        for (Membership membership : groupMemberships) {
+            User user = users.findById(membership.getUserId()).orElseThrow(ResourceNotFoundException::new);
+            groupUsers.add(user);
+            emails.add(user.getEmail());
+        }
+
+        // 4. apaga o arquivo físico da foto do idoso, se houver (AC-013.2, P5, D-35): o cascade do
+        //    banco só cobre linhas, nunca o arquivo em disco apontado por elder.photoPath — sem
+        //    este passo, a exclusão do grupo deixaria um arquivo órfão com dado pessoal do idoso
+        //    que já não existe em nenhuma linha (mesma chamada de uploadPhoto/removePhoto).
+        if (elder.getPhotoPath() != null) {
+            photoStorage.delete(elder.getPhotoPath());
+        }
+
+        // 5. apaga o grupo: o cascade (D-35) já leva elders, emergency_contacts, memberships e
+        //    invitations daquele grupo — não é preciso apagar essas linhas uma a uma aqui.
+        CareGroup group = careGroups.findById(elder.getGroupId()).orElseThrow(ResourceNotFoundException::new);
+        careGroups.delete(group);
+
+        // 6. apaga as contas (users) coletadas no passo 3 — apagamento físico de conta, não só o
+        //    vínculo com o grupo (AC-013.2 "inclusive a do Responsável", AC-013.5).
+        users.deleteAll(groupUsers);
+
+        // 7. publica 1 evento por e-mail coletado; o envio real acontece pós-commit (D-23), pelo
+        //    mesmo listener usado por SignupService.
+        for (String email : emails) {
+            events.publishEvent(new GroupDeletedEmail(email));
+        }
     }
 
     /**

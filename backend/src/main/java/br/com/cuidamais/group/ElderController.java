@@ -28,8 +28,8 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
  * (application.yml), por isso o mapeamento aqui é só {@code /elders} (mesmo padrão de {@code
  * AuthController}/{@code MeController}).
  *
- * <p>{@code DELETE /elders/{id}} (T-033, exclusão do grupo inteiro) é de tarefa futura —
- * propositalmente não implementada aqui, mesmo já existindo no contrato.
+ * <p>{@code DELETE /elders/{id}} (T-033) exclui o grupo de cuidado inteiro — idoso, contatos,
+ * memberships e as contas ({@code users}) de todo o grupo (D-38).
  */
 @RestController
 @RequestMapping("/elders")
@@ -124,6 +124,21 @@ public class ElderController {
             @PathVariable UUID elderId, @AuthenticationPrincipal AccountPrincipal principal) {
         ElderPhotoContent photo = elderService.getPhoto(elderId, principal.userId());
         return ResponseEntity.ok().contentType(photo.contentType()).body(photo.bytes());
+    }
+
+    /**
+     * {@code DELETE /elders/{elderId}} (T-033, AC-013.2, AC-013.3, AC-013.4, AC-013.5, D-38):
+     * {@code x-required-permission: admin} — só o Responsável administrador exclui; um membro
+     * comum recebe {@code 403 NOT_ALLOWED} antes de chegar aqui (checagem do interceptor). Apaga
+     * o grupo de cuidado inteiro (idoso, contatos, memberships e as contas do grupo) e dispara o
+     * e-mail de aviso a todas elas; não há corpo de resposta.
+     */
+    @RequiresAdminPermission
+    @DeleteMapping("/{elderId}")
+    public ResponseEntity<Void> deleteCareGroup(
+            @PathVariable UUID elderId, @AuthenticationPrincipal AccountPrincipal principal) {
+        elderService.deleteCareGroup(elderId, principal.userId());
+        return ResponseEntity.noContent().build();
     }
 
     /**

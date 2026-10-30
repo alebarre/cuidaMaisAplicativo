@@ -1,5 +1,6 @@
 package br.com.cuidamais.membership;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -18,4 +19,14 @@ public interface MembershipRepository extends JpaRepository<Membership, UUID> {
      * é o caso normal de uma conta {@code ATIVO} sem grupo (AC-001.7).
      */
     Optional<Membership> findByUserId(UUID userId);
+
+    /**
+     * Busca TODAS as memberships de um grupo, em qualquer status (T-033, D-38) — ao contrário de
+     * {@link #findByUserId}, que é sempre no máximo uma por conta. Usado por {@code
+     * ElderService#deleteCareGroup} para coletar, antes do apagamento, a lista completa de contas
+     * do grupo (Responsável + membros em {@code ATIVO}/{@code AGUARDANDO_APROVACAO}/{@code
+     * RECUSADO}/{@code EXPIRADO}/{@code REMOVIDO}) que precisam ter o {@code User} apagado e
+     * receber o e-mail de aviso de AC-013.3.
+     */
+    List<Membership> findByGroupId(UUID groupId);
 }
