@@ -10,6 +10,8 @@ import br.com.cuidamais.group.exception.GroupAlreadyExistsException;
 import br.com.cuidamais.group.exception.PhotoTooLargeException;
 import br.com.cuidamais.group.exception.UnsupportedPhotoFormatException;
 import br.com.cuidamais.membership.exception.InvitationConflictException;
+import br.com.cuidamais.membership.exception.InvitationUnavailableException;
+import br.com.cuidamais.membership.exception.InviteBlockedException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
@@ -188,6 +190,39 @@ public class GlobalExceptionHandler {
         problem.setInstance(URI.create(request.getRequestURI()));
         problem.setProperty("code", exception.getCode().name());
         return problemResponse(HttpStatus.CONFLICT, problem);
+    }
+
+    /**
+     * T-041, AC-004.5: código de convite conferido, mas convite vencido/cancelado/usado. 410 com
+     * {@code code} estável; nenhum dado de pessoa no corpo (P5).
+     */
+    @ExceptionHandler(InvitationUnavailableException.class)
+    public ResponseEntity<ProblemDetail> handleInvitationUnavailable(
+            InvitationUnavailableException exception, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.GONE, "Este convite não está mais disponível.");
+        problem.setType(URI.create("/problems/invitation-unavailable"));
+        problem.setTitle("Convite indisponível");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        problem.setProperty("code", exception.getCode().name());
+        return problemResponse(HttpStatus.GONE, problem);
+    }
+
+    /**
+     * T-041, AC-003.3/AC-004.7: e-mail bloqueado por 30 min. 423 com {@code
+     * code=INVITE_CODE_BLOCKED} e {@code blockedUntil}; igual com ou sem convite (P5).
+     */
+    @ExceptionHandler(InviteBlockedException.class)
+    public ResponseEntity<ProblemDetail> handleInviteBlocked(
+            InviteBlockedException exception, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.LOCKED, "Muitas tentativas incorretas; tente novamente mais tarde.");
+        problem.setType(URI.create("/problems/invite-code-blocked"));
+        problem.setTitle("Código de convite bloqueado");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        problem.setProperty("code", "INVITE_CODE_BLOCKED");
+        problem.setProperty("blockedUntil", exception.getBlockedUntil().toString());
+        return problemResponse(HttpStatus.LOCKED, problem);
     }
 
     /**

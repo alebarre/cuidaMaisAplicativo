@@ -37,6 +37,15 @@ public class JwtService {
     /** Validade do access token (D-11); é também o {@code expiresIn} de {@code AccessToken} no contrato (900 s). */
     public static final Duration ACCESS_TOKEN_TTL = Duration.ofMinutes(15);
 
+    /** Validade do token de cadastro de convidado (D-16): 15 minutos. */
+    public static final Duration REGISTRATION_TOKEN_TTL = Duration.ofMinutes(15);
+
+    /** Claim de finalidade que distingue o token de cadastro de um access token. */
+    private static final String PURPOSE_CLAIM = "typ";
+
+    /** Valor do claim {@code typ} do token de cadastro por convite. */
+    private static final String REGISTRATION_PURPOSE = "invite-registration";
+
     private final SecretKey key;
 
     /**
@@ -59,6 +68,24 @@ public class JwtService {
                 .subject(userId.toString())
                 .issuedAt(Date.from(agora))
                 .expiration(Date.from(expira))
+                .signWith(key, Jwts.SIG.HS256)
+                .compact();
+    }
+
+    /**
+     * Emite o {@code registrationToken} (D-16, AC-004.2): JWT assinado de 15 min que carrega o
+     * e-mail normalizado e o id do convite (claims {@code email} e {@code inv}) e o claim de
+     * finalidade {@code typ=invite-registration}. Não tem {@code sub} e {@link #parseSubject} o
+     * recusa pelo {@code typ}, então nunca autentica rotas protegidas. A T-042 o validará.
+     */
+    public String issueRegistrationToken(String email, UUID invitationId, Clock clock) {
+        Instant agora = clock.instant();
+        return Jwts.builder()
+                .claim(PURPOSE_CLAIM, REGISTRATION_PURPOSE)
+                .claim("email", email)
+                .claim("inv", invitationId.toString())
+                .issuedAt(Date.from(agora))
+                .expiration(Date.from(agora.plus(REGISTRATION_TOKEN_TTL)))
                 .signWith(key, Jwts.SIG.HS256)
                 .compact();
     }
@@ -87,6 +114,10 @@ public class JwtService {
             // verificado de novo aqui, explicitamente, sem depender da tolerância da biblioteca.
             if (!clock.instant().isBefore(claims.getExpiration().toInstant())) {
                 throw new IllegalArgumentException("Access token expirado (D-11)");
+            }
+            // Tokens com finalidade própria (ex. cadastro por convite) não são access tokens.
+            if (claims.get(PURPOSE_CLAIM) != null) {
+                throw new IllegalArgumentException("Token de outra finalidade não é access token");
             }
             return UUID.fromString(claims.getSubject());
         } catch (JwtException | IllegalArgumentException e) {

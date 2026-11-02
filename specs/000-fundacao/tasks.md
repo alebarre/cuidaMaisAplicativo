@@ -181,7 +181,7 @@ grupo deixa o banco vazio.
   *Pronto quando:* um teste por `code` de conflito, um por status reenviável, um provando que o
   e-mail não contém o sobrenome do idoso, e um provando que reenviar durante o bloqueio o
   encerra na hora.
-- [ ] **T-041** `POST /invitations/redeem` (D-16, D-34): `next = REGISTER` com token de 15 min;
+- [x] **T-041** `POST /invitations/redeem` (D-16, D-34): `next = REGISTER` com token de 15 min;
   `next = REINSTATED` quando a conta existe no grupo (volta a `AGUARDANDO_APROVACAO`, senha
   antiga, prazo novo, e-mail ao Responsável); `400` idêntico com `remainingAttempts` para código
   errado e e-mail sem convite; `423` com `blockedUntil` na 5ª e durante 30 min mesmo com código

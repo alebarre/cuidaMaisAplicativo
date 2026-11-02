@@ -68,6 +68,11 @@ app:
     # o `.env` local (ver .env.example); o profile test define o seu próprio em
     # application-test.yml; produção exige JWT_SECRET real (application-prod.yml, sem padrão).
     secret: ${JWT_SECRET}
+  invitations:
+    # T-041 (R-03): limite por IP em POST /invitations/redeem; não são segredos.
+    redeem-rate-limit:
+      max-requests: ${REDEEM_RATE_LIMIT_MAX:30}
+      window: ${REDEEM_RATE_LIMIT_WINDOW:PT1M}   # Duration ISO-8601
   jobs:
     # T-019 (plan D-09, R-06): um único @Scheduled, a cada 5 min, numa instância só; o profile test desliga
     enabled: ${JOBS_ENABLED:true}

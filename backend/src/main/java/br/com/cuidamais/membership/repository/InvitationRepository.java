@@ -33,6 +33,12 @@ public interface InvitationRepository extends JpaRepository<Invitation, UUID> {
      */
     List<Invitation> findByGroupIdAndEmailAndStatus(UUID groupId, String email, InvitationStatus status);
 
+    /**
+     * Todos os convites de um e-mail normalizado, em qualquer grupo/status, do mais recente ao mais
+     * antigo (T-041: o resgate confere o código contra eles, D-34).
+     */
+    List<Invitation> findByEmailOrderByCreatedAtDesc(String email);
+
     /** Todos os convites do grupo, sem filtro de status (paginado e ordenado pelo chamador). */
     Page<Invitation> findByGroupId(UUID groupId, Pageable pageable);
 

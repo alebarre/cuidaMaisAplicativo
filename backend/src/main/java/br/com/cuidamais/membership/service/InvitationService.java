@@ -55,6 +55,7 @@ public class InvitationService {
 
     private final InvitationRepository invitations;
     private final InviteCodeAttemptsRepository attemptsRepository;
+    private final InviteCodeAttemptsLocker attemptsLocker;
     private final MembershipRepository memberships;
     private final ElderRepository elders;
     private final UserRepository users;
@@ -63,10 +64,11 @@ public class InvitationService {
     private final Clock clock;
     private final SecureRandom random = new SecureRandom();
 
-    /** Injeção por construtor de repositórios, encoder de hash (D-04), publicador e relógio (D-10). */
+    /** Injeção por construtor de repositórios, acesso travado ao contador (R-03), encoder (D-04), publicador e relógio (D-10). */
     public InvitationService(
             InvitationRepository invitations,
             InviteCodeAttemptsRepository attemptsRepository,
+            InviteCodeAttemptsLocker attemptsLocker,
             MembershipRepository memberships,
             ElderRepository elders,
             UserRepository users,
@@ -75,6 +77,7 @@ public class InvitationService {
             Clock clock) {
         this.invitations = invitations;
         this.attemptsRepository = attemptsRepository;
+        this.attemptsLocker = attemptsLocker;
         this.memberships = memberships;
         this.elders = elders;
         this.users = users;
@@ -100,11 +103,15 @@ public class InvitationService {
             throw new ResourceNotFoundException();
         }
 
-        // 2. normaliza o e-mail e confere elegibilidade (AC-003.5, AC-003.6, AC-003.7).
+        // 2. normaliza o e-mail e trava o contador ANTES de qualquer escrita (ordem global de locks:
+        //    invite_code_attempts -> invitations -> memberships), evitando deadlock com o resgate.
         String email = rawEmail.strip().toLowerCase(Locale.ROOT);
+        InviteCodeAttempts attempts = attemptsLocker.lock(email);
+
+        // 3. confere elegibilidade (AC-003.5, AC-003.6, AC-003.7).
         checkEligible(groupId, email);
 
-        // 3. e-mail com convite ENVIADO = reenvio: o anterior é cancelado (AC-003.12, D-31).
+        // 4. e-mail com convite ENVIADO = reenvio: o anterior é cancelado (AC-003.12, D-31).
         List<Invitation> pending = invitations.findByGroupIdAndEmailAndStatus(groupId, email, InvitationStatus.ENVIADO);
         String code = generateCode();
         String hash = encoder.encode(code);
@@ -118,8 +125,8 @@ public class InvitationService {
             }
         }
 
-        // 4. persiste, zera o contador do e-mail e agenda o e-mail pós-commit.
-        return persistAndNotify(created, callerUserId, elder, code);
+        // 5. persiste, zera o contador do e-mail (já travado) e agenda o e-mail pós-commit.
+        return persistAndNotify(created, attempts, callerUserId, elder, code);
     }
 
     /**
@@ -179,19 +186,23 @@ public class InvitationService {
         Invitation previous = invitations.findByIdAndGroupId(invitationId, groupId)
                 .orElseThrow(ResourceNotFoundException::new);
 
-        // 2. convite usado não se reenvia (D-31).
+        // 2. trava o contador do e-mail do convite (lido sem escrita) antes de qualquer escrita:
+        //    ordem global invite_code_attempts -> invitations -> memberships (evita deadlock com o resgate).
+        InviteCodeAttempts attempts = attemptsLocker.lock(previous.getEmail());
+
+        // 3. convite usado não se reenvia (D-31).
         if (previous.getStatus() == InvitationStatus.USADO) {
             throw new InvitationConflictException(InvitationConflictCode.INVITATION_USED);
         }
 
-        // 3. novo convite (o anterior ENVIADO vigente é cancelado pelo domínio).
+        // 4. novo convite (o anterior ENVIADO vigente é cancelado pelo domínio).
         String code = generateCode();
         Invitation created = Invitation.resend(
                 previous, encoder.encode(code), InvitationOrigin.MANUAL, callerUserId, clock);
 
-        // 4. persiste o anterior (pode ter mudado), o novo, zera o contador e notifica.
+        // 5. persiste o anterior (pode ter mudado), o novo, zera o contador e notifica.
         invitations.save(previous);
-        return persistAndNotify(created, callerUserId, elder, code);
+        return persistAndNotify(created, attempts, callerUserId, elder, code);
     }
 
     /**
@@ -222,16 +233,16 @@ public class InvitationService {
     }
 
     /**
-     * Persiste o convite novo, zera o contador do e-mail (cria a linha se não existir; AC-003.9,
-     * AC-003.11) e publica o e-mail do convite, entregue só após o commit (D-23).
+     * Persiste o convite novo, zera o contador do e-mail (já travado e criado pelo chamador, antes
+     * de qualquer escrita; AC-003.9, AC-003.11) e publica o e-mail do convite, entregue só após o
+     * commit (D-23).
      */
-    private InvitationResponse persistAndNotify(Invitation created, UUID callerUserId, Elder elder, String code) {
+    private InvitationResponse persistAndNotify(
+            Invitation created, InviteCodeAttempts attempts, UUID callerUserId, Elder elder, String code) {
         // 1. grava o convite (só hash do código).
         invitations.save(created);
 
         // 2. zera tentativas e bloqueio, preservando autoResends.
-        InviteCodeAttempts attempts = attemptsRepository.findById(created.getEmail())
-                .orElseGet(() -> InviteCodeAttempts.forEmail(created.getEmail(), clock));
         attempts.registerInvitationCreated(clock);
         attemptsRepository.save(attempts);
 
