@@ -172,7 +172,7 @@ grupo deixa o banco vazio.
 
 ## Fase 4 — Convites, aprovação e membros
 
-- [ ] **T-040** Convites do Responsável: criar (409 `NO_ELDER` sem idoso, `ALREADY_MEMBER`,
+- [x] **T-040** Convites do Responsável: criar (409 `NO_ELDER` sem idoso, `ALREADY_MEMBER`,
   `EMAIL_UNAVAILABLE` para outro grupo ou conta sem grupo, reconvite permitido para
   `RECUSADO`/`EXPIRADO`/`REMOVIDO`, e-mail `ENVIADO` repetido = reenvio), listar (só admin, com
   `failedAttempts`, `blockedUntil`, `autoResends`), reenviar (201, zera tentativas e bloqueio),

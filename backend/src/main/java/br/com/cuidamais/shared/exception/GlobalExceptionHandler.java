@@ -9,6 +9,7 @@ import br.com.cuidamais.auth.exception.TooManyRequestsException;
 import br.com.cuidamais.group.exception.GroupAlreadyExistsException;
 import br.com.cuidamais.group.exception.PhotoTooLargeException;
 import br.com.cuidamais.group.exception.UnsupportedPhotoFormatException;
+import br.com.cuidamais.membership.exception.InvitationConflictException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
@@ -163,6 +164,29 @@ public class GlobalExceptionHandler {
         problem.setType(GROUP_ALREADY_EXISTS_TYPE);
         problem.setTitle("Grupo já existe");
         problem.setInstance(URI.create(request.getRequestURI()));
+        return problemResponse(HttpStatus.CONFLICT, problem);
+    }
+
+    /**
+     * Conflitos das rotas de convite (T-040): 409 com {@code code} estável. EMAIL_UNAVAILABLE usa
+     * um texto único para "outro grupo" e "conta sem grupo" (AC-003.7) e nenhum texto cita e-mail
+     * ou pessoa (P5).
+     */
+    @ExceptionHandler(InvitationConflictException.class)
+    public ResponseEntity<ProblemDetail> handleInvitationConflict(
+            InvitationConflictException exception, HttpServletRequest request) {
+        String detail = switch (exception.getCode()) {
+            case ALREADY_MEMBER -> "Esta pessoa já faz parte do grupo ou tem um pedido em análise.";
+            case EMAIL_UNAVAILABLE -> "Este e-mail não pode ser convidado.";
+            case NO_ELDER -> "Cadastre o idoso antes de convidar pessoas.";
+            case INVITATION_USED -> "Convite já utilizado; não pode ser reenviado.";
+            case INVITATION_NOT_CANCELLABLE -> "Só é possível cancelar um convite enviado.";
+        };
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, detail);
+        problem.setType(URI.create("/problems/invitation-conflict"));
+        problem.setTitle("Conflito no convite");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        problem.setProperty("code", exception.getCode().name());
         return problemResponse(HttpStatus.CONFLICT, problem);
     }
 
