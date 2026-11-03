@@ -22,6 +22,14 @@ import org.springframework.data.repository.query.Param;
 public interface MembershipRepository extends JpaRepository<Membership, UUID> {
 
     /**
+     * Condição JPQL única de "vigência" (D-09): qualquer status passa, exceto {@code
+     * AGUARDANDO_APROVACAO} com prazo esgotado ({@code expiresAt <= :now}). Compartilhada pela
+     * listagem (T-043) e pela contagem do badge (T-044) para que as duas nunca divirjam.
+     */
+    String VIGENTE = " and (m.status <> br.com.cuidamais.membership.domain.MembershipStatus."
+            + "AGUARDANDO_APROVACAO or m.expiresAt > :now)";
+
+    /**
      * Busca o único vínculo de uma conta com um grupo, se houver (D-02). {@code Optional.empty()}
      * é o caso normal de uma conta {@code ATIVO} sem grupo (AC-001.7).
      */
@@ -45,15 +53,23 @@ public interface MembershipRepository extends JpaRepository<Membership, UUID> {
      */
     @Query(
             value = "select m from Membership m, User u where u.id = m.userId and m.groupId = :groupId"
-                    + " and m.status = :status and (m.status <> br.com.cuidamais.membership.domain."
-                    + "MembershipStatus.AGUARDANDO_APROVACAO or m.expiresAt > :now)"
+                    + " and m.status = :status" + VIGENTE
                     + " order by lower(u.name), m.id",
             countQuery = "select count(m) from Membership m where m.groupId = :groupId"
-                    + " and m.status = :status and (m.status <> br.com.cuidamais.membership.domain."
-                    + "MembershipStatus.AGUARDANDO_APROVACAO or m.expiresAt > :now)")
+                    + " and m.status = :status" + VIGENTE)
     Page<Membership> findMembersPage(
             @Param("groupId") UUID groupId,
             @Param("status") MembershipStatus status,
             @Param("now") Instant now,
             Pageable pageable);
+
+    /**
+     * Conta os pedidos pendentes vigentes de um grupo (T-044, AC-006.1/AC-006.2): status {@code
+     * AGUARDANDO_APROVACAO} com {@code now < expiresAt}, a mesma regra da listagem (D-09), sem
+     * carregar entidades.
+     */
+    @Query("select count(m) from Membership m where m.groupId = :groupId"
+            + " and m.status = br.com.cuidamais.membership.domain.MembershipStatus.AGUARDANDO_APROVACAO"
+            + VIGENTE)
+    long countPendingVigentes(@Param("groupId") UUID groupId, @Param("now") Instant now);
 }

@@ -8,6 +8,7 @@ import br.com.cuidamais.membership.domain.Membership;
 import br.com.cuidamais.membership.domain.MembershipStatus;
 import br.com.cuidamais.membership.dto.MemberPageResponse;
 import br.com.cuidamais.membership.dto.MemberResponse;
+import br.com.cuidamais.membership.dto.PendingCountResponse;
 import br.com.cuidamais.membership.repository.MembershipRepository;
 import br.com.cuidamais.shared.exception.NotAllowedException;
 import br.com.cuidamais.shared.exception.ResourceNotFoundException;
@@ -94,5 +95,28 @@ public class MemberService {
                 .toList();
         return new MemberPageResponse(
                 result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages(), items);
+    }
+
+    /**
+     * Conta os pedidos aguardando aprovação com prazo vigente (badge do Responsável, AC-006.1 e
+     * AC-006.2). A exigência de Responsável (403) é aplicada pela anotação da rota; aqui só se
+     * prova a posse do grupo (D-32).
+     *
+     * @throws ResourceNotFoundException {@code elderId} não é o idoso do grupo do chamador
+     */
+    @Transactional(readOnly = true)
+    public PendingCountResponse pendingCount(UUID elderId, UUID callerUserId) {
+        // 1. grupo e vínculo do chamador; sem vínculo ou idoso diferente é 404 genérico (D-32).
+        Membership viewerMembership = memberships.findByUserId(callerUserId)
+                .orElseThrow(ResourceNotFoundException::new);
+        Elder elder = elders.findByGroupId(viewerMembership.getGroupId())
+                .orElseThrow(ResourceNotFoundException::new);
+        if (!elder.getId().equals(elderId)) {
+            throw new ResourceNotFoundException();
+        }
+
+        // 2. contagem dedicada, com a mesma regra de vigência da listagem (D-09).
+        return new PendingCountResponse(
+                memberships.countPendingVigentes(viewerMembership.getGroupId(), clock.instant()));
     }
 }

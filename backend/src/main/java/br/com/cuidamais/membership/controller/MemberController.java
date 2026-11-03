@@ -3,7 +3,9 @@ package br.com.cuidamais.membership.controller;
 import br.com.cuidamais.auth.domain.AccountPrincipal;
 import br.com.cuidamais.membership.domain.MembershipStatus;
 import br.com.cuidamais.membership.dto.MemberPageResponse;
+import br.com.cuidamais.membership.dto.PendingCountResponse;
 import br.com.cuidamais.membership.service.MemberService;
+import br.com.cuidamais.shared.security.RequiresAdminPermission;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -14,7 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Rotas de membros do grupo (tag {@code members} do contrato). Por ora só a listagem (T-043);
+ * Rotas de membros do grupo (tag {@code members} do contrato). Listagem (T-043) e contagem de pendentes (T-044);
  * a regra (filtro só do Responsável, visibilidade de contato) fica em {@link MemberService}.
  */
 @RestController
@@ -41,5 +43,16 @@ public class MemberController {
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal AccountPrincipal principal) {
         return ResponseEntity.ok(memberService.list(elderId, principal.userId(), status, page, size));
+    }
+
+    /**
+     * {@code GET /pending-count} (AC-006.1, AC-006.2): quantidade de pedidos aguardando aprovação
+     * vigentes, para o badge do Responsável ({@code x-required-permission: admin}).
+     */
+    @GetMapping("/pending-count")
+    @RequiresAdminPermission
+    public ResponseEntity<PendingCountResponse> pendingCount(
+            @PathVariable UUID elderId, @AuthenticationPrincipal AccountPrincipal principal) {
+        return ResponseEntity.ok(memberService.pendingCount(elderId, principal.userId()));
     }
 }

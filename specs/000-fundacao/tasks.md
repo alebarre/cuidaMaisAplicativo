@@ -201,7 +201,7 @@ grupo deixa o banco vazio.
   conforme a política (D-28, D-39). ACs: 006.2, 006.9, 009.5, 011.5, 011.8.
   *Pronto quando:* teste de API da matriz para Cuidador e Familiar nos três campos; Cuidador com
   `?status=REMOVIDO` recebe 403; Responsável vê telefone e endereço do `REMOVIDO`.
-- [ ] **T-044** `[P]` `GET /members/pending-count`. AC: 006.1.
+- [x] **T-044** `[P]` `GET /members/pending-count`. AC: 006.1.
 - [ ] **T-045** `approve` / `reject` com lock otimista (`version`, D-08), 410 `REQUEST_EXPIRED`
   para prazo vencido e e-mail do resultado. ACs: 006.3, 006.4, 006.6, 006.8, 007.1, 007.2.
   *Pronto quando:* teste com duas decisões simultâneas prova que só a primeira vale (a outra

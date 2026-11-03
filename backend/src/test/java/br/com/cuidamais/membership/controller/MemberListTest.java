@@ -541,6 +541,117 @@ class MemberListTest extends IntegrationTest {
         assertThat(paginaA.path("totalItems").asInt()).isEqualTo(2);
     }
 
+    // ============================================================ reforços T-043 (desempate e estados de conta)
+
+    /**
+     * Reforço do desempate da ordenação ({@code order by lower(u.name), m.id} em {@code
+     * MembershipRepository#findMembersPage}). Quatro membros com o MESMO nome ignorando caixa
+     * ("Ana", "ana", "ANA", "aNa") têm ids controlados e são gravados FORA da ordem dos ids
+     * (4, 2, 3, 1), de modo que a ordem física/de inserção difere da ordem por id. Se o {@code
+     * m.id} sair do ORDER BY, o banco devolve a ordem de inserção e este teste quebra. O
+     * Responsável "Zélia" fica por último pelo nome.
+     */
+    @Test
+    @DisplayName("AC-006.9: nomes iguais ignorando caixa são desempatados por id crescente, não pela ordem de inserção")
+    void ac_006_9_desempate_por_id_com_nomes_iguais_ignorando_caixa() throws Exception {
+        Cenario c = cenarioMinimo();
+        // Ids únicos por execução (a base é aleatória), com o final 1..4 definindo a ordem esperada.
+        long base = UUID.randomUUID().getMostSignificantBits();
+        UUID id1 = new UUID(base, 1L);
+        UUID id2 = new UUID(base, 2L);
+        UUID id3 = new UUID(base, 3L);
+        UUID id4 = new UUID(base, 4L);
+        // Etapa: inserção em ordem embaralhada, nomes que diferem só na caixa.
+        User u4 = membroComId(c.groupId(), c.responsavel(), "aNa", id4);
+        User u2 = membroComId(c.groupId(), c.responsavel(), "ana", id2);
+        User u3 = membroComId(c.groupId(), c.responsavel(), "ANA", id3);
+        User u1 = membroComId(c.groupId(), c.responsavel(), "Ana", id1);
+
+        // Etapa: a ordem devolvida é (lower(name), membership id), com Zélia por último.
+        JsonNode page = listar(c.elderId(), "size=100", c.responsavel());
+
+        List<String> membershipIds = new ArrayList<>();
+        page.path("items").forEach(i -> membershipIds.add(i.path("id").asText()));
+        assertThat(membershipIds.subList(0, 4))
+                .containsExactly(id1.toString(), id2.toString(), id3.toString(), id4.toString());
+        assertThat(idsDeUsuarios(page).subList(0, 4)).containsExactly(
+                u1.getId().toString(), u2.getId().toString(), u3.getId().toString(), u4.getId().toString());
+        assertThat(page.path("items").get(4).path("name").asText()).isEqualTo("Zélia Responsável");
+    }
+
+    /**
+     * O desempate também vale ENTRE páginas: com size=2 os quatro "ana" se dividem em duas páginas
+     * e a concatenação mantém a ordem por id, sem repetir nem perder ninguém.
+     */
+    @Test
+    @DisplayName("AC-006.9: desempate por id é estável entre páginas")
+    void ac_006_9_desempate_por_id_estavel_entre_paginas() throws Exception {
+        Cenario c = cenarioMinimo();
+        long base = UUID.randomUUID().getMostSignificantBits();
+        List<UUID> ids = List.of(
+                new UUID(base, 1L),
+                new UUID(base, 2L),
+                new UUID(base, 3L),
+                new UUID(base, 4L));
+        // Inserção em ordem inversa dos ids.
+        for (int i = ids.size() - 1; i >= 0; i--) {
+            membroComId(c.groupId(), c.responsavel(), i % 2 == 0 ? "Ana" : "ana", ids.get(i));
+        }
+
+        List<String> vistos = new ArrayList<>();
+        for (int p = 0; p < 2; p++) {
+            // Cada iteração = uma página de 2 itens (as duas primeiras só têm "ana").
+            listar(c.elderId(), "page=" + p + "&size=2", c.responsavel())
+                    .path("items").forEach(i -> vistos.add(i.path("id").asText()));
+        }
+
+        assertThat(vistos).containsExactlyElementsOf(ids.stream().map(UUID::toString).toList());
+    }
+
+    /**
+     * Estados de conta que NÃO chegam ao handler da listagem. Comportamento real do {@code
+     * AccountSecurityInterceptor}: rota padrão exige conta {@code ATIVO} com grupo; quem está
+     * {@code AGUARDANDO_APROVACAO} não satisfaz e recebe 403 {@code ACCOUNT_STATE}; {@code
+     * REMOVIDO} é tratado como sessão inválida (401, sem {@code code}, AC-009.2).
+     */
+    @Test
+    @DisplayName("AC-006.9: membro AGUARDANDO_APROVACAO recebe 403 ACCOUNT_STATE na listagem")
+    void ac_006_9_pendente_nao_lista_403_account_state() throws Exception {
+        Cenario c = cenarioMinimo();
+        User pendente = membro(c.groupId(), c.responsavel(), "Pendente Curiosa", MembershipStatus.AGUARDANDO_APROVACAO);
+
+        JsonNode problema = esperar403(c.elderId(), "", pendente);
+
+        assertThat(problema.path("code").asText()).isEqualTo("ACCOUNT_STATE");
+        assertThat(problema.toString()).doesNotContain(c.responsavel().getEmail());
+    }
+
+    /** Membro REMOVIDO perde a sessão: 401 Problem sem {@code code} e sem dados do grupo (AC-009.2). */
+    @Test
+    @DisplayName("AC-006.9: membro REMOVIDO recebe 401 na listagem")
+    void ac_006_9_removido_nao_lista_401() throws Exception {
+        Cenario c = cenarioMinimo();
+        User removido = membro(c.groupId(), c.responsavel(), "Removido Curioso", MembershipStatus.REMOVIDO);
+
+        MvcResult r = mockMvc.perform(requisicao(c.elderId(), "", removido))
+                .andExpect(status().isUnauthorized())
+                .andReturn();
+
+        JsonNode body = json.readTree(r.getResponse().getContentAsString());
+        assertThat(ContractSchemas.schemaFor("Problem").validate(body)).isEmpty();
+        assertThat(body.has("code")).isFalse();
+    }
+
+    /** Conta com membership ATIVO (CUIDADOR) de id escolhido, para provar o desempate por id. */
+    private User membroComId(UUID groupId, User responsavel, String nome, UUID membershipId) {
+        User user = conta(nome);
+        Membership m = Membership.request(groupId, user.getId(), clock);
+        m.approve(Role.CUIDADOR, responsavel.getId(), clock);
+        org.springframework.test.util.ReflectionTestUtils.setField(m, "id", membershipId);
+        memberships.save(m);
+        return user;
+    }
+
     // ============================================================ fábricas de cenário
 
     private record Cenario(
