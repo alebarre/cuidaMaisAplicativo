@@ -19,7 +19,6 @@ import br.com.cuidamais.membership.exception.InviteBlockedException;
 import br.com.cuidamais.membership.repository.InvitationRepository;
 import br.com.cuidamais.membership.repository.InviteCodeAttemptsRepository;
 import br.com.cuidamais.membership.repository.MembershipRepository;
-import br.com.cuidamais.notification.event.PendingRequestEmail;
 import br.com.cuidamais.shared.exception.ResourceNotFoundException;
 import java.time.Clock;
 import java.util.List;
@@ -27,7 +26,6 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,7 +55,7 @@ public class InvitationRedeemService {
     private final UserRepository users;
     private final PasswordEncoder encoder;
     private final JwtService jwtService;
-    private final ApplicationEventPublisher events;
+    private final PendingRequestNotifier pendingNotifier;
     private final Clock clock;
 
     /**
@@ -67,7 +65,7 @@ public class InvitationRedeemService {
      */
     private final String dummyHash;
 
-    /** Injeção por construtor de repositórios, acesso travado ao contador (R-03), encoder (D-04), emissor de token, publicador e relógio (D-10). */
+    /** Injeção por construtor de repositórios, acesso travado ao contador (R-03), encoder (D-04), emissor de token, avisador dos Responsáveis e relógio (D-10). */
     public InvitationRedeemService(
             InvitationRepository invitations,
             InviteCodeAttemptsRepository attemptsRepository,
@@ -77,7 +75,7 @@ public class InvitationRedeemService {
             UserRepository users,
             PasswordEncoder encoder,
             JwtService jwtService,
-            ApplicationEventPublisher events,
+            PendingRequestNotifier pendingNotifier,
             Clock clock) {
         this.invitations = invitations;
         this.attemptsRepository = attemptsRepository;
@@ -87,7 +85,7 @@ public class InvitationRedeemService {
         this.users = users;
         this.encoder = encoder;
         this.jwtService = jwtService;
-        this.events = events;
+        this.pendingNotifier = pendingNotifier;
         this.clock = clock;
         this.dummyHash = encoder.encode(UUID.randomUUID().toString());
     }
@@ -193,12 +191,7 @@ public class InvitationRedeemService {
         existing.ifPresent(a -> codeUsed(a));
 
         // 4. avisa os Responsáveis (admins ativos do grupo) após o commit (D-23, AC-006.7).
-        for (Membership admin : memberships.findByGroupId(invitation.getGroupId())) {
-            if (admin.isAdmin() && admin.getStatus() == MembershipStatus.ATIVO) {
-                users.findById(admin.getUserId()).ifPresent(responsible -> events.publishEvent(
-                        new PendingRequestEmail(responsible.getEmail(), user.get().getName(), m.getExpiresAt())));
-            }
-        }
+        pendingNotifier.notifyAdmins(m, user.get());
         return Optional.of(RedeemInvitationResponse.reinstated(email, elderFirstName, m.getExpiresAt()));
     }
 

@@ -190,7 +190,7 @@ grupo deixa o banco vazio.
   *Pronto quando:* testes provam que e-mail sem convite e código errado recebem **bytes iguais**
   no corpo (exceto `instance`), que código errado para convite `VENCIDO` recebe 400 e não 410, e
   que o `REINSTATED` mantém a senha antiga.
-- [ ] **T-042** `POST /invitations/register` cria usuário (já com `email_verified_at` preenchido:
+- [x] **T-042** `POST /invitations/register` cria usuário (já com `email_verified_at` preenchido:
   o código de convite comprovou o e-mail, AC-004.3, D-33) + membership `AGUARDANDO_APROVACAO` com
   prazo de 24 h e dispara o e-mail ao Responsável. ACs: 004.2, 004.3, 004.4, 006.7.
   *Notas herdadas da T-041:* validar `typ=invite-registration` e os claims `email`/`inv` do

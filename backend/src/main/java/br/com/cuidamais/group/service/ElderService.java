@@ -1,7 +1,7 @@
 package br.com.cuidamais.group.service;
 
 import br.com.cuidamais.auth.domain.User;
-import br.com.cuidamais.auth.dto.AddressRequest;
+import br.com.cuidamais.shared.dto.AddressRequest;
 import br.com.cuidamais.auth.repository.UserRepository;
 import br.com.cuidamais.group.domain.CareGroup;
 import br.com.cuidamais.group.domain.Elder;

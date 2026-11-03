@@ -20,6 +20,7 @@ import br.com.cuidamais.membership.repository.MembershipRepository;
 import br.com.cuidamais.notification.event.InvitationEmail;
 import br.com.cuidamais.shared.exception.ResourceNotFoundException;
 import java.security.SecureRandom;
+import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.util.List;
 import java.util.Locale;
@@ -61,6 +62,7 @@ public class InvitationService {
     private final UserRepository users;
     private final PasswordEncoder encoder;
     private final ApplicationEventPublisher events;
+    private final EntityManager entityManager;
     private final Clock clock;
     private final SecureRandom random = new SecureRandom();
 
@@ -74,6 +76,7 @@ public class InvitationService {
             UserRepository users,
             PasswordEncoder encoder,
             ApplicationEventPublisher events,
+            EntityManager entityManager,
             Clock clock) {
         this.invitations = invitations;
         this.attemptsRepository = attemptsRepository;
@@ -83,6 +86,7 @@ public class InvitationService {
         this.users = users;
         this.encoder = encoder;
         this.events = events;
+        this.entityManager = entityManager;
         this.clock = clock;
     }
 
@@ -189,6 +193,7 @@ public class InvitationService {
         // 2. trava o contador do e-mail do convite (lido sem escrita) antes de qualquer escrita:
         //    ordem global invite_code_attempts -> invitations -> memberships (evita deadlock com o resgate).
         InviteCodeAttempts attempts = attemptsLocker.lock(previous.getEmail());
+        entityManager.refresh(previous); // relê o estado após o lock (um cadastro concorrente pode tê-lo usado).
 
         // 3. convite usado não se reenvia (D-31).
         if (previous.getStatus() == InvitationStatus.USADO) {
@@ -219,13 +224,18 @@ public class InvitationService {
         Invitation invitation = invitations.findByIdAndGroupId(invitationId, groupId)
                 .orElseThrow(ResourceNotFoundException::new);
 
-        // 2. só ENVIADO vigente é cancelável; o vencido derivado é VENCIDO para o cliente.
+        // 2. trava o contador do e-mail antes de escrever (ordem global de locks, R-08) e relê o
+        //    convite, que um cadastro/reenvio concorrente pode ter mudado enquanto esperávamos.
+        attemptsLocker.lock(invitation.getEmail());
+        entityManager.refresh(invitation);
+
+        // 3. só ENVIADO vigente é cancelável; o vencido derivado é VENCIDO para o cliente.
         if (invitation.getStatus() != InvitationStatus.ENVIADO
                 || !clock.instant().isBefore(invitation.getExpiresAt())) {
             throw new InvitationConflictException(InvitationConflictCode.INVITATION_NOT_CANCELLABLE);
         }
 
-        // 3. transição no domínio e resposta com o contador atual.
+        // 4. transição no domínio e resposta com o contador atual.
         invitation.cancel(clock);
         invitations.save(invitation);
         return InvitationResponse.of(

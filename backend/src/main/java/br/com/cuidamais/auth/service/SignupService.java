@@ -4,7 +4,7 @@ import br.com.cuidamais.auth.controller.AuthController;
 import br.com.cuidamais.auth.domain.IssuedOtp;
 import br.com.cuidamais.auth.domain.OtpPurpose;
 import br.com.cuidamais.auth.domain.User;
-import br.com.cuidamais.auth.dto.AddressRequest;
+import br.com.cuidamais.shared.dto.AddressRequest;
 import br.com.cuidamais.auth.dto.SignupRequest;
 import br.com.cuidamais.auth.repository.OtpCodeRepository;
 import br.com.cuidamais.auth.repository.UserRepository;
@@ -14,9 +14,11 @@ import br.com.cuidamais.shared.domain.Endereco;
 import java.time.Clock;
 import java.util.Locale;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Regra de negócio de {@code POST /auth/signup} (T-020, AC-001.1, AC-001.3, AC-001.4; D-15).
@@ -38,6 +40,7 @@ public class SignupService {
     private final OtpService otpService;
     private final PasswordEncoder passwordEncoder;
     private final ApplicationEventPublisher events;
+    private final TransactionTemplate transaction;
 
     /**
      * @param userRepository busca/persiste contas, usado para checar duplicidade de e-mail e salvar a nova conta
@@ -45,18 +48,21 @@ public class SignupService {
      * @param otpService emite o código de confirmação (texto puro + hash, D-04)
      * @param passwordEncoder gera o hash BCrypt da senha informada (D-14)
      * @param events publica os eventos de e-mail (confirmação ou aviso de duplicidade) dentro da transação (D-23)
+     * @param transactionManager base das transações programáticas (a corrida de e-mail precisa ser tratada fora da transação que falhou)
      */
     public SignupService(
             UserRepository userRepository,
             OtpCodeRepository otpCodeRepository,
             OtpService otpService,
             PasswordEncoder passwordEncoder,
-            ApplicationEventPublisher events) {
+            ApplicationEventPublisher events,
+            PlatformTransactionManager transactionManager) {
         this.userRepository = userRepository;
         this.otpCodeRepository = otpCodeRepository;
         this.otpService = otpService;
         this.passwordEncoder = passwordEncoder;
         this.events = events;
+        this.transaction = new TransactionTemplate(transactionManager);
     }
 
     /**
@@ -68,8 +74,25 @@ public class SignupService {
      * @param request dados do formulário de cadastro
      * @param clock relógio injetado (D-10) usado para {@code created_at}
      */
-    @Transactional
     public void signup(SignupRequest request, Clock clock) {
+        // 1. tenta o cadastro numa transação própria; se outro pedido (ex. cadastro por convite)
+        // criou o mesmo e-mail entre a checagem e o INSERT, o unique estoura (AC-001.4, AC-003.10).
+        try {
+            transaction.executeWithoutResult(status -> createAccount(request, clock));
+        } catch (DataIntegrityViolationException e) {
+            // 2. a transação perdedora já foi revertida (nada de OTP nem e-mail de confirmação para
+            // a conta alheia); tratamos como e-mail já cadastrado: só o aviso ao dono (D-15).
+            String email = request.email().toLowerCase(Locale.ROOT);
+            transaction.executeWithoutResult(status -> events.publishEvent(new DuplicateSignupEmail(email)));
+        }
+    }
+
+    /**
+     * Corpo transacional do cadastro: e-mail existente só avisa o dono; e-mail novo cria a conta,
+     * emite o código e publica a confirmação. O {@code saveAndFlush} força o unique de e-mail a
+     * estourar aqui dentro, para o chamador tratar a corrida.
+     */
+    private void createAccount(SignupRequest request, Clock clock) {
         // 1. normaliza o e-mail para minúsculas (único lugar que faz essa normalização na criação)
         String email = request.email().toLowerCase(Locale.ROOT);
 
@@ -83,7 +106,7 @@ public class SignupService {
         Endereco address = toEndereco(request.address());
         String passwordHash = passwordEncoder.encode(request.password());
         User user = User.signup(request.name(), email, request.phone(), address, passwordHash, clock);
-        userRepository.save(user);
+        userRepository.saveAndFlush(user);
 
         // 4. emite e persiste o código de confirmação (só o hash, D-04)
         IssuedOtp issuedOtp = otpService.issue(user.getId(), OtpPurpose.CONFIRMACAO_EMAIL);

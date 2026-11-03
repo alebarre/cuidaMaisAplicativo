@@ -1,11 +1,11 @@
-package br.com.cuidamais.auth.dto;
+package br.com.cuidamais.shared.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 /**
- * Corpo do objeto {@code address} de {@link SignupRequest}, espelhando o schema {@code Address}
+ * Corpo do objeto {@code address} de {@code SignupRequest} e {@code RegisterWithInvitationRequest}, espelhando o schema {@code Address}
  * do contrato (D-25, AC-011.1, AC-011.2).
  *
  * <p>{@code state} é {@code String} (e não um enum Java) de propósito: um valor fora das 27

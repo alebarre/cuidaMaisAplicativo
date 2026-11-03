@@ -1,6 +1,6 @@
 package br.com.cuidamais.group.dto;
 
-import br.com.cuidamais.auth.dto.AddressRequest;
+import br.com.cuidamais.shared.dto.AddressRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

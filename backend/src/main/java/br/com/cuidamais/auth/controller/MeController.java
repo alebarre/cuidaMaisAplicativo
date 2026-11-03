@@ -4,7 +4,7 @@ import br.com.cuidamais.auth.domain.AccountPrincipal;
 import br.com.cuidamais.auth.domain.AccountState;
 import br.com.cuidamais.auth.domain.User;
 import br.com.cuidamais.auth.dto.AccountStateResponse;
-import br.com.cuidamais.auth.dto.AddressRequest;
+import br.com.cuidamais.shared.dto.AddressRequest;
 import br.com.cuidamais.auth.dto.MeMembershipResponse;
 import br.com.cuidamais.auth.dto.MeResponse;
 import br.com.cuidamais.auth.dto.UpdateMeRequest;

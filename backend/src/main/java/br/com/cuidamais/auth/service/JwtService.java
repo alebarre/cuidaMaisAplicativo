@@ -1,6 +1,7 @@
 package br.com.cuidamais.auth.service;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -76,7 +77,7 @@ public class JwtService {
      * Emite o {@code registrationToken} (D-16, AC-004.2): JWT assinado de 15 min que carrega o
      * e-mail normalizado e o id do convite (claims {@code email} e {@code inv}) e o claim de
      * finalidade {@code typ=invite-registration}. Não tem {@code sub} e {@link #parseSubject} o
-     * recusa pelo {@code typ}, então nunca autentica rotas protegidas. A T-042 o validará.
+     * recusa pelo {@code typ}, então nunca autentica rotas protegidas. {@link #parseRegistrationToken} o valida (T-042).
      */
     public String issueRegistrationToken(String email, UUID invitationId, Clock clock) {
         Instant agora = clock.instant();
@@ -102,12 +103,11 @@ public class JwtService {
      */
     public UUID parseSubject(String token, Clock clock) {
         try {
-            Claims claims = Jwts.parser()
+            Claims claims = onlyHs256(Jwts.parser()
                     .verifyWith(key)
                     .clock(() -> Date.from(clock.instant()))
                     .build()
-                    .parseSignedClaims(token)
-                    .getPayload();
+                    .parseSignedClaims(token));
 
             // JJWT só recusa como expirado quando "agora" é estritamente POSTERIOR a exp; D-11
             // exige exp exclusivo (o próprio instante de exp já não vale mais), então o limite é
@@ -123,5 +123,53 @@ public class JwtService {
         } catch (JwtException | IllegalArgumentException e) {
             throw new IllegalArgumentException("Access token inválido ou expirado", e);
         }
+    }
+
+    /** Dados do token de cadastro por convite: e-mail normalizado e id do convite resgatado. */
+    public record RegistrationClaims(String email, UUID invitationId) {}
+
+    /**
+     * Valida o {@code registrationToken} (D-16 rev. 2, T-042): assinatura, prazo (exp exclusivo,
+     * pelo {@link Clock} informado), {@code typ=invite-registration} e claims {@code email} e
+     * {@code inv} (UUID) presentes. Um access token comum (sem {@code typ}) nunca passa. Toda
+     * falha tem a mesma exceção, sem distinguir o motivo.
+     *
+     * @throws IllegalArgumentException token inválido por qualquer motivo
+     */
+    public RegistrationClaims parseRegistrationToken(String token, Clock clock) {
+        try {
+            // 1. assinatura e prazo, com o relógio injetado.
+            Claims claims = onlyHs256(Jwts.parser()
+                    .verifyWith(key)
+                    .clock(() -> Date.from(clock.instant()))
+                    .build()
+                    .parseSignedClaims(token));
+            if (!clock.instant().isBefore(claims.getExpiration().toInstant())) {
+                throw new IllegalArgumentException("Token de cadastro expirado");
+            }
+            // 2. finalidade e claims obrigatórios.
+            if (!REGISTRATION_PURPOSE.equals(claims.get(PURPOSE_CLAIM, String.class))) {
+                throw new IllegalArgumentException("Token de outra finalidade");
+            }
+            String email = claims.get("email", String.class);
+            String inv = claims.get("inv", String.class);
+            if (email == null || email.isBlank() || inv == null) {
+                throw new IllegalArgumentException("Claims ausentes");
+            }
+            return new RegistrationClaims(email, UUID.fromString(inv));
+        } catch (JwtException | IllegalArgumentException | ClassCastException e) {
+            throw new IllegalArgumentException("Token de cadastro inválido ou expirado", e);
+        }
+    }
+
+    /**
+     * Aceita apenas JWT assinado com HS256 (o único algoritmo que o serviço emite): qualquer outro
+     * {@code alg} no header (HS384, HS512...) é recusado. Devolve as claims do token aceito.
+     */
+    private static Claims onlyHs256(Jws<Claims> jws) {
+        if (!"HS256".equals(jws.getHeader().getAlgorithm())) {
+            throw new IllegalArgumentException("Algoritmo de assinatura não aceito");
+        }
+        return jws.getPayload();
     }
 }
