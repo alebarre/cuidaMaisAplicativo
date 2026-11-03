@@ -202,7 +202,7 @@ grupo deixa o banco vazio.
   *Pronto quando:* teste de API da matriz para Cuidador e Familiar nos três campos; Cuidador com
   `?status=REMOVIDO` recebe 403; Responsável vê telefone e endereço do `REMOVIDO`.
 - [x] **T-044** `[P]` `GET /members/pending-count`. AC: 006.1.
-- [ ] **T-045** `approve` / `reject` com lock otimista (`version`, D-08), 410 `REQUEST_EXPIRED`
+- [x] **T-045** `approve` / `reject` com lock otimista (`version`, D-08), 410 `REQUEST_EXPIRED`
   para prazo vencido e e-mail do resultado. ACs: 006.3, 006.4, 006.6, 006.8, 007.1, 007.2.
   *Pronto quando:* teste com duas decisões simultâneas prova que só a primeira vale (a outra
   recebe 409); aprovar aos 24 h e 1 s recebe 410 antes do job rodar.

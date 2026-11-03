@@ -12,6 +12,8 @@ import br.com.cuidamais.group.exception.UnsupportedPhotoFormatException;
 import br.com.cuidamais.membership.exception.InvitationConflictException;
 import br.com.cuidamais.membership.exception.InvitationUnavailableException;
 import br.com.cuidamais.membership.exception.InviteBlockedException;
+import br.com.cuidamais.membership.exception.MemberConflictException;
+import br.com.cuidamais.membership.exception.RequestExpiredException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
@@ -190,6 +192,42 @@ public class GlobalExceptionHandler {
         problem.setInstance(URI.create(request.getRequestURI()));
         problem.setProperty("code", exception.getCode().name());
         return problemResponse(HttpStatus.CONFLICT, problem);
+    }
+
+    /**
+     * T-045, AC-006.3/006.4/009.4, D-08: conflito ao decidir um pedido (já decidido, versão obsoleta ou
+     * alvo Responsável). 409 com {@code code} estável e texto sem dado de pessoa (P5).
+     */
+    @ExceptionHandler(MemberConflictException.class)
+    public ResponseEntity<ProblemDetail> handleMemberConflict(
+            MemberConflictException exception, HttpServletRequest request) {
+        String detail = switch (exception.getCode()) {
+            case REQUEST_ALREADY_DECIDED -> "Este pedido já foi decidido.";
+            case VERSION_CONFLICT -> "O pedido foi alterado; atualize a lista e tente novamente.";
+            case ADMIN_PROTECTED -> "O Responsável do grupo não pode ser alterado.";
+        };
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, detail);
+        problem.setType(URI.create("/problems/member-conflict"));
+        problem.setTitle("Conflito na decisão do pedido");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        problem.setProperty("code", exception.getCode().name());
+        return problemResponse(HttpStatus.CONFLICT, problem);
+    }
+
+    /**
+     * T-045, AC-006.8, D-09 rev.2: pedido vencido (mesmo antes do job). 410 {@code REQUEST_EXPIRED}
+     * com a mensagem exata da spec.
+     */
+    @ExceptionHandler(RequestExpiredException.class)
+    public ResponseEntity<ProblemDetail> handleRequestExpired(
+            RequestExpiredException exception, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.GONE, "Este pedido expirou. Envie um novo convite.");
+        problem.setType(URI.create("/problems/request-expired"));
+        problem.setTitle("Pedido expirado");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        problem.setProperty("code", "REQUEST_EXPIRED");
+        return problemResponse(HttpStatus.GONE, problem);
     }
 
     /**
