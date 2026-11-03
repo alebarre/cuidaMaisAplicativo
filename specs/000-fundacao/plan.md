@@ -383,6 +383,17 @@ Cada teste traz o ID do critério no nome ou comentário, por exemplo
   órfão; a retrospectiva de cada feature futura deve conferir isso.
 - **R-06** O agendador de D-09 roda em uma instância só no MVP; se houver mais de uma réplica,
   precisará de lock distribuído (ShedLock ou equivalente). Registrado, não implementado.
+  *Nota (T-041):* o rate limit por IP de `redeem` (R-03) também é em memória do processo e vale só
+  numa instância; com várias réplicas precisará de store compartilhado (ex. Redis). Atrás de proxy
+  reverso, `getRemoteAddr()` devolve o IP do proxy — antes de produção, configurar proxy confiável
+  (`server.forward-headers-strategy`) para que o limite seja por cliente e não global.
+- **R-07** *(T-041)* Canal de tempo residual em `redeem`: o custo de BCrypt é proporcional ao
+  número de convites do e-mail (e-mail sem convite gasta um `matches` contra um hash fictício).
+  Quem mede tempo de resposta distingue "1 convite" de "vários", mas não "sem convite" de "com
+  convite". Aceito no MVP; mitigação futura: custo fixo de N `matches` por pedido.
+- **R-08** *(T-041)* O contador de `invite_code_attempts` é travado com lock pessimista de linha,
+  em ordem global `invite_code_attempts → invitations → memberships`; qualquer código novo que
+  escreva nessas tabelas deve respeitá-la para não criar deadlock.
 - **D-42** Todos os jobs de D-09 são **idempotentes** e usam `SELECT ... FOR UPDATE SKIP LOCKED`
   nas linhas que processam, para que uma rodada atrasada ou repetida nunca envie e-mail em dobro.
   *Esclarecimentos registrados na T-019:* (1) a infra vive em `shared.jobs`: `ScheduledRoutine`
