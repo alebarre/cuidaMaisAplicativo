@@ -513,13 +513,21 @@ class RequestAuthorizationTest extends IntegrationTest {
                 return bearer(outro.issue(user.getId(), t.clock));
             }
         },
-        /** JWT legítimo com um caractere da assinatura trocado. */
+        /**
+         * JWT legítimo com um caractere da assinatura trocado. Troca um caractere do MEIO da
+         * assinatura (os 6 bits contam), nunca o último: numa assinatura HS256 de 32 bytes o último
+         * caractere base64url tem 2 bits de preenchimento, e trocá-lo às vezes não altera os bytes
+         * (token continuaria válido, teste instável). O novo caractere é sempre diferente do original.
+         */
         ADULTERADO {
             @Override
             String header(RequestAuthorizationTest t, User user) {
                 String token = t.tokenDe(user);
-                char ultimo = token.charAt(token.length() - 1);
-                return bearer(token.substring(0, token.length() - 1) + (ultimo == 'A' ? 'B' : 'A'));
+                int inicioAssinatura = token.lastIndexOf('.') + 1;
+                int meio = inicioAssinatura + (token.length() - inicioAssinatura) / 2;
+                char original = token.charAt(meio);
+                char novo = original == 'A' ? 'B' : 'A';
+                return bearer(token.substring(0, meio) + novo + token.substring(meio + 1));
             }
         },
         /** JWT legítimo emitido há 16 minutos (validade de 15, D-11). */

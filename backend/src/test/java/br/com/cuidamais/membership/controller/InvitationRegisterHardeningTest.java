@@ -1,7 +1,9 @@
 package br.com.cuidamais.membership.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mockingDetails;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -317,6 +319,121 @@ class InvitationRegisterHardeningTest extends IntegrationTest {
         esperar401(registrar(c.token()));
 
         assertThat(chamadasAEncode()).as("encode antes da checagem da conta").isZero();
+    }
+
+    // ============================================================ 4) janela entre pre-checagem e lock
+
+    /**
+     * Grupo 4 (AC-004.3, AC-003.10): a pre-checagem sem lock passa e o estado muda DURANTE o BCrypt
+     * (apos a pre-checagem, antes do lock do contador). O {@code doAnswer} em {@code encode} roda a
+     * mudanca em conexao propria (autocommit/transacao do repositorio), portanto ja commitada no
+     * banco quando o register chega ao lock. Prova que a releitura (refresh) + checagem sob lock e
+     * a que vale: sem ela o register usaria o convite obsoleto do contexto de persistencia.
+     */
+    private void aoCodificarSenhaDoRegister(Runnable mudanca) {
+        doAnswer(inv -> {
+            // so o hash da senha do register dispara a mudanca (o setup usa outras senhas)
+            if ("Convidada#2026".equals(inv.getArgument(0))) {
+                emOutraThread(mudanca);
+            }
+            return inv.callRealMethod();
+        }).when(encoder).encode(any(CharSequence.class));
+    }
+
+    /**
+     * Executa a mudanca em OUTRA thread e espera. Necessario porque o register roda numa transacao
+     * ligada a thread atual: JdbcTemplate/repositorios nesta thread entrariam NA transacao do
+     * register (e seriam desfeitos com o 401), em vez de commitar de verdade antes do lock.
+     */
+    private static void emOutraThread(Runnable mudanca) {
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            pool.submit(mudanca).get(30, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new IllegalStateException("mudanca na janela falhou", e);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    private void assertSemEfeitos(Cenario c, int usuariosComEmail, String conviteEsperado) {
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM users WHERE email = ?", Integer.class, c.email()))
+                .as("usuarios com o e-mail").isEqualTo(usuariosComEmail);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM memberships WHERE group_id = ?", Integer.class, c.grupo().groupId()))
+                .as("nenhuma membership nova (so a do Responsavel)").isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT status FROM invitations WHERE id = ?", String.class, c.convite()))
+                .as("convite no estado imposto pela janela").isEqualTo(conviteEsperado);
+    }
+
+    /** Convite cancelado por outro caminho (ja commitado) durante o BCrypt: 401, nada criado, segue CANCELADO. */
+    @Test
+    @DisplayName("AC-004.3/AC-003.10: convite cancelado durante o BCrypt (apos a pre-checagem) => 401, sem conta nem membership")
+    void ac_004_3_convite_cancelado_na_janela_antes_do_lock_e_401() throws Exception {
+        Cenario c = cenarioComTokenValido();
+        // Cenario: pre-checagem ve ENVIADO; durante o encode o convite vira CANCELADO no banco.
+        aoCodificarSenhaDoRegister(() -> jdbc.update(
+                "UPDATE invitations SET status = 'CANCELADO', cancelled_at = ? WHERE id = ?",
+                Timestamp.from(clock.instant()), c.convite()));
+
+        esperar401(registrar(c.token()));
+
+        assertSemEfeitos(c, 0, "CANCELADO");
+    }
+
+    /** Convite consumido (USADO) por outro caminho durante o BCrypt: 401, nada criado, segue USADO. */
+    @Test
+    @DisplayName("AC-004.3/AC-003.10: convite marcado USADO durante o BCrypt (apos a pre-checagem) => 401, sem conta nem membership")
+    void ac_004_3_convite_usado_na_janela_antes_do_lock_e_401() throws Exception {
+        Cenario c = cenarioComTokenValido();
+        // Cenario: pre-checagem ve ENVIADO; durante o encode outro register consome o convite.
+        aoCodificarSenhaDoRegister(() -> jdbc.update(
+                "UPDATE invitations SET status = 'USADO', used_at = ? WHERE id = ?",
+                Timestamp.from(clock.instant()), c.convite()));
+
+        esperar401(registrar(c.token()));
+
+        assertSemEfeitos(c, 0, "USADO");
+    }
+
+    /**
+     * Convite vence pelo relogio durante o BCrypt (token de 15 min ainda valido, convite de 10 min
+     * ja vencido): a checagem sob lock usa o Clock e recusa; convite continua ENVIADO no banco.
+     */
+    @Test
+    @DisplayName("AC-004.3/AC-003.10: convite vence pelo relógio durante o BCrypt (apos a pre-checagem) => 401, sem conta nem membership")
+    void ac_004_3_convite_vencido_pelo_relogio_na_janela_antes_do_lock_e_401() throws Exception {
+        Grupo grupo = grupoComIdoso();
+        String email = emailNovo();
+        UUID convite = semearConvite(grupo, email, clock.instant().plus(Duration.ofMinutes(10)));
+        Cenario c = new Cenario(grupo, email, convite, resgatar(email));
+        // Cenario: pre-checagem ve convite vigente; durante o encode o relogio passa de 10 min (< 15 do token).
+        aoCodificarSenhaDoRegister(() -> clock.advance(Duration.ofMinutes(11)));
+
+        esperar401(registrar(c.token()));
+
+        assertSemEfeitos(c, 0, "ENVIADO");
+    }
+
+    /**
+     * Conta com o mesmo e-mail criada (commitada) durante o BCrypt, ex.: cadastro comum: o register
+     * perde, responde 401 sem membership, o convite segue ENVIADO e existe exatamente 1 usuario.
+     */
+    @Test
+    @DisplayName("AC-004.3/AC-003.10: conta com o mesmo e-mail criada durante o BCrypt (apos a pre-checagem) => 401, sem duplicar usuário nem membership")
+    void ac_003_10_conta_criada_na_janela_antes_do_lock_e_401() throws Exception {
+        Cenario c = cenarioComTokenValido();
+        // Cenario: pre-checagem ve e-mail livre; durante o encode outro caminho cria a conta (commit proprio).
+        aoCodificarSenhaDoRegister(() -> {
+            User existente = User.signup("Dona Original", c.email(), "21999990000", endereco(),
+                    "hash-qualquer-nao-usado", clock);
+            existente.verifyEmail(clock);
+            users.saveAndFlush(existente);
+        });
+
+        esperar401(registrar(c.token()));
+
+        assertSemEfeitos(c, 1, "ENVIADO");
     }
 
     // ============================================================ helpers
