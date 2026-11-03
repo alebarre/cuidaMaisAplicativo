@@ -1,11 +1,11 @@
-package br.com.cuidamais.group.dto;
+package br.com.cuidamais.shared.dto;
 
 import br.com.cuidamais.shared.domain.Endereco;
 
 /**
- * Corpo do objeto {@code address} nas respostas de {@link ElderResponse}/{@link
+ * Corpo do objeto {@code address} nas respostas de {@code ElderResponse}/{@code
  * EmergencyContactResponse}, espelhando o schema {@code Address} do contrato (D-25) — os mesmos
- * 7 campos de {@link br.com.cuidamais.auth.dto.AddressRequest}, mas do lado da leitura (nenhuma
+ * 7 campos de {@link AddressRequest}, mas do lado da leitura (nenhuma
  * validação aqui, só conversão de {@link Endereco}).
  */
 public record AddressResponse(

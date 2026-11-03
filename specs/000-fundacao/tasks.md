@@ -196,7 +196,7 @@ grupo deixa o banco vazio.
   *Notas herdadas da T-041:* validar `typ=invite-registration` e os claims `email`/`inv` do
   `registrationToken` (falta `JwtService.parseRegistrationToken`); marcar o convite `USADO` e zerar o
   contador (`registerCodeUsed`) no mesmo passo; respeitar a ordem de locks de R-08.
-- [ ] **T-043** `GET /members`: sem `status` só `ATIVO` para qualquer membro; `status` só para
+- [x] **T-043** `GET /members`: sem `status` só `ATIVO` para qualquer membro; `status` só para
   admin (403 para os demais); pendentes vencidos não aparecem; endereço, telefone e e-mail
   conforme a política (D-28, D-39). ACs: 006.2, 006.9, 009.5, 011.5, 011.8.
   *Pronto quando:* teste de API da matriz para Cuidador e Familiar nos três campos; Cuidador com

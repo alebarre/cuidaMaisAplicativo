@@ -1,7 +1,7 @@
 package br.com.cuidamais.auth.dto;
 
 import br.com.cuidamais.auth.domain.User;
-import br.com.cuidamais.group.dto.AddressResponse;
+import br.com.cuidamais.shared.dto.AddressResponse;
 import java.util.UUID;
 
 /**

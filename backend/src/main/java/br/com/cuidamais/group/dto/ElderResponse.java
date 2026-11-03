@@ -2,6 +2,7 @@ package br.com.cuidamais.group.dto;
 
 import br.com.cuidamais.group.domain.Elder;
 import br.com.cuidamais.group.domain.EmergencyContact;
+import br.com.cuidamais.shared.dto.AddressResponse;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;

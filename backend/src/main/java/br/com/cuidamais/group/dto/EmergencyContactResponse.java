@@ -1,6 +1,7 @@
 package br.com.cuidamais.group.dto;
 
 import br.com.cuidamais.group.domain.EmergencyContact;
+import br.com.cuidamais.shared.dto.AddressResponse;
 
 /**
  * Corpo de um item de {@code emergencyContacts} nas respostas de {@link ElderResponse},
