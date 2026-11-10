@@ -10,5 +10,11 @@ public enum MemberConflictCode {
     /** A {@code version} enviada no approve não é a atual: alguém mexeu no pedido antes (D-08). */
     VERSION_CONFLICT,
     /** O alvo é o Responsável do grupo, que nunca é decidido/alterado/removido (AC-009.4). */
-    ADMIN_PROTECTED
+    ADMIN_PROTECTED,
+    /**
+     * O alvo não está {@code ATIVO} (aguardando, recusado, expirado ou já removido): só ATIVO muda de
+     * papel ou é removido (AC-012.1, T-047). Distinto de {@link #REQUEST_ALREADY_DECIDED}, que fala de
+     * pedido já decidido.
+     */
+    MEMBER_NOT_ACTIVE
 }

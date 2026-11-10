@@ -2,6 +2,7 @@ package br.com.cuidamais.membership.service;
 
 import br.com.cuidamais.auth.domain.User;
 import br.com.cuidamais.auth.repository.UserRepository;
+import br.com.cuidamais.auth.service.RefreshTokenService;
 import br.com.cuidamais.group.domain.Elder;
 import br.com.cuidamais.group.repository.ElderRepository;
 import br.com.cuidamais.membership.domain.Membership;
@@ -42,6 +43,10 @@ import org.springframework.transaction.annotation.Transactional;
  * AC-006.4, AC-006.8, AC-007.1, AC-009.4). Prazo vencido responde 410 antes de qualquer 409; a
  * corrida entre duas decisões é resolvida pelo lock otimista (D-08) e o e-mail de resultado sai
  * só após o commit (D-23).
+ *
+ * <p>E gerencia membros ativos (T-047): {@code changeRole} (AC-009.1) e {@code remove} (AC-009.2,
+ * AC-012.2). A remoção encerra todas as sessões do removido na mesma transação (D-13) e não envia
+ * e-mail; os dados da pessoa ficam guardados (AC-009.3, AC-014.2).
  */
 @Service
 public class MemberService {
@@ -53,16 +58,18 @@ public class MemberService {
     private final UserRepository users;
     private final Clock clock;
     private final ApplicationEventPublisher events;
+    private final RefreshTokenService refreshTokens;
 
-    /** Injeção por construtor dos repositórios e do relógio (D-10). */
+    /** Injeção por construtor dos repositórios, do relógio (D-10) e do serviço público de refresh tokens (auth). */
     public MemberService(
             MembershipRepository memberships, ElderRepository elders, UserRepository users, Clock clock,
-            ApplicationEventPublisher events) {
+            ApplicationEventPublisher events, RefreshTokenService refreshTokens) {
         this.memberships = memberships;
         this.elders = elders;
         this.users = users;
         this.clock = clock;
         this.events = events;
+        this.refreshTokens = refreshTokens;
     }
 
     /**
@@ -229,5 +236,104 @@ public class MemberService {
 
         // 10. o Responsável vê todos os campos do membro.
         return MemberResponse.of(target, person, true);
+    }
+
+    /**
+     * Troca o papel de um membro ATIVO entre CUIDADOR e FAMILIAR (T-047, AC-009.1, D-29). Pedir o
+     * papel que o membro já tem é idempotente (200, nada muda). Não derruba sessões: o papel é lido do
+     * banco a cada requisição (D-13).
+     *
+     * @throws ResourceNotFoundException grupo/idoso/membro fora do escopo do chamador (D-32)
+     * @throws MemberConflictException alvo é o Responsável, não está ATIVO ou perdeu a corrida (D-08)
+     */
+    @Transactional
+    public MemberResponse changeRole(UUID elderId, UUID memberId, UUID callerUserId, Role newRole) {
+        // 1. escopo (D-32), alvo não Responsável e ATIVO (409), nessa precedência.
+        Membership target = resolveManageableTarget(elderId, memberId, callerUserId);
+
+        // 2. regra de domínio (D-07); IllegalStateException vira 409 sem vazar a mensagem.
+        try {
+            target.changeRole(newRole);
+        } catch (IllegalStateException e) {
+            throw new MemberConflictException(MemberConflictCode.MEMBER_NOT_ACTIVE);
+        }
+
+        // 3. grava e faz flush aqui dentro: o perdedor de uma corrida (D-08) falha agora e vira 409.
+        flushOrConflict(target);
+
+        // 4. o Responsável vê todos os campos do membro.
+        User person = users.findById(target.getUserId()).orElseThrow(ResourceNotFoundException::new);
+        return MemberResponse.of(target, person, true);
+    }
+
+    /**
+     * Remove um membro ATIVO (T-047, AC-009.2): vínculo vai a REMOVIDO e todas as sessões dele são
+     * revogadas na mesma transação (D-13). Nada é apagado (AC-009.3, AC-014.2) e nenhum e-mail sai
+     * (AC-012.2).
+     *
+     * @throws ResourceNotFoundException grupo/idoso/membro fora do escopo do chamador (D-32)
+     * @throws MemberConflictException alvo é o Responsável, não está ATIVO ou perdeu a corrida (D-08)
+     */
+    @Transactional
+    public void remove(UUID elderId, UUID memberId, UUID callerUserId) {
+        // 1. escopo (D-32), alvo não Responsável e ATIVO (409), nessa precedência.
+        Membership target = resolveManageableTarget(elderId, memberId, callerUserId);
+
+        // 2. regra de domínio (D-07); IllegalStateException vira 409 sem vazar a mensagem.
+        try {
+            target.remove(clock);
+        } catch (IllegalStateException e) {
+            throw new MemberConflictException(MemberConflictCode.MEMBER_NOT_ACTIVE);
+        }
+
+        // 3. flush ANTES de revogar: só o vencedor da corrida (D-08) passa daqui; o perdedor vira 409
+        // sem ter revogado nada.
+        flushOrConflict(target);
+
+        // 4. encerra todas as sessões do removido na MESMA transação: se algo falhar, o rollback
+        // desfaz a remoção e a revogação juntas (atômico).
+        refreshTokens.revokeAllForUser(target.getUserId());
+    }
+
+    /**
+     * Resolve o alvo de uma ação de gestão (PATCH/DELETE): escopo do grupo e do idoso (D-32), depois
+     * Responsável protegido (AC-009.4) e depois só ATIVO (AC-012.1).
+     */
+    private Membership resolveManageableTarget(UUID elderId, UUID memberId, UUID callerUserId) {
+        // 1. grupo e idoso do chamador; fora do escopo é 404 (D-32).
+        Membership caller = memberships.findByUserId(callerUserId).orElseThrow(ResourceNotFoundException::new);
+        Elder elder = elders.findByGroupId(caller.getGroupId()).orElseThrow(ResourceNotFoundException::new);
+        if (!elder.getId().equals(elderId)) {
+            throw new ResourceNotFoundException();
+        }
+
+        // 2. o membro precisa existir e ser do mesmo grupo; senão o mesmo 404 (AC-015.3).
+        Membership target = memberships.findById(memberId).orElseThrow(ResourceNotFoundException::new);
+        if (!target.getGroupId().equals(caller.getGroupId())) {
+            throw new ResourceNotFoundException();
+        }
+
+        // 3. o Responsável nunca é alterado nem removido (AC-009.4), nem por ele mesmo.
+        if (target.isAdmin()) {
+            throw new MemberConflictException(MemberConflictCode.ADMIN_PROTECTED);
+        }
+
+        // 4. só ATIVO muda de papel ou é removido (AC-012.1).
+        if (target.getStatus() != MembershipStatus.ATIVO) {
+            throw new MemberConflictException(MemberConflictCode.MEMBER_NOT_ACTIVE);
+        }
+        return target;
+    }
+
+    /**
+     * Grava com flush imediato: com o lock otimista (D-08) o UPDATE ... WHERE version=? do perdedor
+     * afeta 0 linhas e falha aqui, onde dá para virar 409 VERSION_CONFLICT em vez de 500 no commit.
+     */
+    private void flushOrConflict(Membership target) {
+        try {
+            memberships.saveAndFlush(target);
+        } catch (OptimisticLockingFailureException e) {
+            throw new MemberConflictException(MemberConflictCode.VERSION_CONFLICT);
+        }
     }
 }

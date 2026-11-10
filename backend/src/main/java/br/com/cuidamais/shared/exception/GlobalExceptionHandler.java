@@ -205,6 +205,7 @@ public class GlobalExceptionHandler {
             case REQUEST_ALREADY_DECIDED -> "Este pedido já foi decidido.";
             case VERSION_CONFLICT -> "O pedido foi alterado; atualize a lista e tente novamente.";
             case ADMIN_PROTECTED -> "O Responsável do grupo não pode ser alterado.";
+            case MEMBER_NOT_ACTIVE -> "Este membro não está ativo.";
         };
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, detail);
         problem.setType(URI.create("/problems/member-conflict"));

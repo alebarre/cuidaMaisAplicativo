@@ -210,7 +210,7 @@ grupo deixa o banco vazio.
   `retention_deadline`. ACs: 006.5, 006.8, 007.1. Depende de: T-019.
   *Pronto quando:* com `Clock` avançado 24 h, aprovar retorna 410 **mesmo antes** do job, e
   depois do job o status é `EXPIRADO`, o e-mail foi enviado e `retention_deadline` = agora + 30 d.
-- [ ] **T-047** `PATCH` (papel, vale na hora) e `DELETE` de membro (`REMOVIDO`, sessões
+- [x] **T-047** `PATCH` (papel, vale na hora) e `DELETE` de membro (`REMOVIDO`, sessões
   encerradas, dados preservados só para o admin); admin intocável.
   ACs: 009.1, 009.2, 009.3, 009.4, 014.2. *Pronto quando:* após `DELETE`, a linha continua no
   banco com nome, telefone e endereço; o refresh token do removido está revogado. (AC-009.3 é
