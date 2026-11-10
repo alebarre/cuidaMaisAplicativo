@@ -597,4 +597,110 @@ class MembershipTest {
                         MembershipStatus.EXPIRADO,
                         MembershipStatus.REMOVIDO);
     }
+
+    // ------------------------------------------------------------------ T-046: retention_deadline na expiração
+    //
+    // API nova esperada da entidade (criada pelo implementador da T-046): `Instant
+    // getRetentionDeadline()` — o valor da coluna `memberships.retention_deadline` (V1__foundation.sql,
+    // TIMESTAMPTZ NULL), que a entidade passa a mapear. Nulo enquanto a membership não expirou;
+    // `expire(Clock)` o grava como `clock.instant() + 30 dias` (D-09 rev. 2 item 1, AC-014.1). A
+    // contagem parte do instante em que `expire` é chamado (o "agora" do job), não de `expiresAt`.
+
+    /**
+     * AC-014.1: um pedido recém-criado (e o Responsável) ainda não tem prazo de retenção; a coluna só
+     * é preenchida na expiração.
+     */
+    @Test
+    @DisplayName("AC-014.1 retention_deadline é nulo em request() e admin()")
+    void ac_014_1_retention_deadline_nasce_nulo() {
+        assertThat(Membership.request(GROUP_ID, USER_ID, clock).getRetentionDeadline()).isNull();
+        assertThat(Membership.admin(GROUP_ID, ADMIN_ID, clock).getRetentionDeadline()).isNull();
+    }
+
+    /**
+     * AC-014.1 / AC-006.5: expirar no instante exato do vencimento (24 h) grava retention_deadline =
+     * esse instante + 30 dias exatos.
+     */
+    @Test
+    @DisplayName("AC-014.1 expire(clock) grava retention_deadline = agora + 30 dias")
+    void ac_014_1_expire_grava_retention_deadline_em_30_dias() {
+        Membership m = Membership.request(GROUP_ID, USER_ID, clock);
+        clock.advance(PRAZO_APROVACAO);
+
+        m.expire(clock);
+
+        assertThat(m.getStatus()).isEqualTo(MembershipStatus.EXPIRADO);
+        assertThat(m.getRetentionDeadline()).isEqualTo(T0.plus(PRAZO_APROVACAO).plus(Duration.ofDays(30)));
+    }
+
+    /**
+     * AC-014.1: se a expiração ocorre atrasada (26 h depois do pedido), a retenção conta a partir do
+     * "agora" da chamada, não de expiresAt.
+     */
+    @Test
+    @DisplayName("AC-014.1 expire(clock) atrasado conta os 30 dias do instante da chamada, não de expiresAt")
+    void ac_014_1_expire_atrasado_conta_do_instante_da_chamada() {
+        Membership m = Membership.request(GROUP_ID, USER_ID, clock);
+        clock.advance(Duration.ofHours(26));
+
+        m.expire(clock);
+
+        assertThat(m.getRetentionDeadline()).isEqualTo(T0.plus(Duration.ofHours(26)).plus(Duration.ofDays(30)));
+        assertThat(m.getRetentionDeadline()).isNotEqualTo(m.getExpiresAt().plus(Duration.ofDays(30)));
+    }
+
+    /**
+     * AC-006.5: ninguém decidiu o pedido expirado, então expire() não grava decidedBy nem decidedAt.
+     */
+    @Test
+    @DisplayName("AC-006.5 expire(clock) não preenche decidedBy nem decidedAt")
+    void ac_006_5_expire_nao_preenche_decisor() {
+        Membership m = Membership.request(GROUP_ID, USER_ID, clock);
+        clock.advance(PRAZO_APROVACAO);
+
+        m.expire(clock);
+
+        assertThat(m.getDecidedBy()).isNull();
+        assertThat(m.getDecidedAt()).isNull();
+    }
+
+    /**
+     * AC-006.5: expirar antes de completar 24 h continua rejeitado (IllegalStateException) e NÃO
+     * deixa retention_deadline gravado.
+     */
+    @Test
+    @DisplayName("AC-006.5 expire(clock) com prazo não vencido continua rejeitado e não grava retention_deadline")
+    void ac_006_5_expire_antes_do_prazo_nao_grava_retention_deadline() {
+        Membership m = Membership.request(GROUP_ID, USER_ID, clock);
+        clock.advance(PRAZO_APROVACAO.minusMillis(1));
+
+        assertThatThrownBy(() -> m.expire(clock)).isInstanceOf(IllegalStateException.class);
+
+        assertThat(m.getStatus()).isEqualTo(MembershipStatus.AGUARDANDO_APROVACAO);
+        assertThat(m.getRetentionDeadline()).isNull();
+    }
+
+    /**
+     * D-07: expirar a partir de ATIVO, RECUSADO, EXPIRADO ou REMOVIDO continua lançando
+     * IllegalStateException e não altera retention_deadline (para EXPIRADO, o valor da 1a expiração é
+     * preservado; para os demais segue nulo). Cada linha: o estado de partida.
+     */
+    @ParameterizedTest(name = "AC-012.1 expirar a partir de {0} não altera retention_deadline")
+    @EnumSource(
+            value = MembershipStatus.class,
+            names = {"ATIVO", "RECUSADO", "EXPIRADO", "REMOVIDO"})
+    @DisplayName("AC-012.1 / D-07 expirar fora de AGUARDANDO_APROVACAO lança exceção e preserva retention_deadline")
+    void ac_012_1_expirar_fora_de_aguardando_nao_altera_retention_deadline(MembershipStatus de) {
+        Membership m = memberIn(de, clock);
+        Instant antes = m.getRetentionDeadline();
+        clock.advance(PRAZO_APROVACAO.multipliedBy(2));
+
+        assertThatThrownBy(() -> m.expire(clock)).isInstanceOf(IllegalStateException.class);
+
+        assertThat(m.getStatus()).isEqualTo(de);
+        assertThat(m.getRetentionDeadline()).isEqualTo(antes);
+        if (de != MembershipStatus.EXPIRADO) {
+            assertThat(m.getRetentionDeadline()).as("só quem expirou tem retenção").isNull();
+        }
+    }
 }

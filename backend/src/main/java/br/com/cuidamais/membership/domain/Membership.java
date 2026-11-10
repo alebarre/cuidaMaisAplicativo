@@ -32,6 +32,9 @@ public class Membership {
 
     private static final Duration PRAZO_APROVACAO = Duration.ofHours(24);
 
+    /** Retenção dos dados de um pedido expirado (D-09 rev. 2 item 1, AC-014.1): 30 dias. */
+    private static final Duration PRAZO_RETENCAO = Duration.ofDays(30);
+
     /** Estados a partir dos quais um reconvite (AC-004.6) é aceito. */
     private static final Set<MembershipStatus> REINSTAURAVEL =
             Set.of(MembershipStatus.RECUSADO, MembershipStatus.EXPIRADO, MembershipStatus.REMOVIDO);
@@ -78,6 +81,14 @@ public class Membership {
 
     @Column(name = "decided_at")
     private Instant decidedAt;
+
+    /**
+     * Instante a partir do qual os dados de um pedido {@code EXPIRADO} podem ser excluídos
+     * (AC-014.1). Nulo enquanto a membership não expirou; gravado uma única vez por {@link
+     * #expire(Clock)}. A exclusão em si é a T-049; aqui só se persiste o prazo.
+     */
+    @Column(name = "retention_deadline")
+    private Instant retentionDeadline;
 
     @Version
     @Column(name = "version", nullable = false)
@@ -148,17 +159,25 @@ public class Membership {
 
     /**
      * Job agendado (D-09) marca como vencido um pedido sem decisão depois de 24 h (AC-006.5). Só
-     * é aceito a partir de {@code AGUARDANDO_APROVACAO} e depois do prazo já ter passado.
+     * é aceito a partir de {@code AGUARDANDO_APROVACAO} e depois do prazo já ter passado (borda
+     * fechada: no instante exato de {@code expiresAt} já expira, como o 410 de AC-006.8).
+     *
+     * <p>Grava {@code retention_deadline = agora + 30 dias} (AC-014.1, D-09 rev. 2): a contagem
+     * parte do instante em que a transição de fato ocorre (o "agora" do job), não de {@code
+     * expiresAt}. Ninguém decidiu o pedido, então {@code decidedBy}/{@code decidedAt} não são
+     * tocados. Uma chamada rejeitada não altera nenhum campo.
      */
     public void expire(Clock clock) {
         if (status != MembershipStatus.AGUARDANDO_APROVACAO) {
             throw new IllegalStateException(
                     "Só é possível expirar um pedido AGUARDANDO_APROVACAO");
         }
-        if (clock.instant().isBefore(expiresAt)) {
+        Instant agora = clock.instant();
+        if (agora.isBefore(expiresAt)) {
             throw new IllegalStateException("O prazo de 24 h ainda não venceu (AC-006.5)");
         }
         this.status = MembershipStatus.EXPIRADO;
+        this.retentionDeadline = agora.plus(PRAZO_RETENCAO);
     }
 
     /**
@@ -256,6 +275,15 @@ public class Membership {
 
     public Instant getDecidedAt() {
         return decidedAt;
+    }
+
+    /**
+     * Prazo de retenção do pedido expirado (AC-014.1): {@code instante da expiração + 30 dias}, ou
+     * {@code null} para quem nunca expirou. É o que a rotina de retenção (T-049) compara com o
+     * "agora" para decidir a exclusão dos dados da pessoa.
+     */
+    public Instant getRetentionDeadline() {
+        return retentionDeadline;
     }
 
     public long getVersion() {

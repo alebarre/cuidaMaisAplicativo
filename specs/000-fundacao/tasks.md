@@ -206,7 +206,7 @@ grupo deixa o banco vazio.
   para prazo vencido e e-mail do resultado. ACs: 006.3, 006.4, 006.6, 006.8, 007.1, 007.2.
   *Pronto quando:* teste com duas decisões simultâneas prova que só a primeira vale (a outra
   recebe 409); aprovar aos 24 h e 1 s recebe 410 antes do job rodar.
-- [ ] **T-046** Job de expiração de pedidos (D-09 item 1): `EXPIRADO` + e-mail +
+- [x] **T-046** Job de expiração de pedidos (D-09 item 1): `EXPIRADO` + e-mail +
   `retention_deadline`. ACs: 006.5, 006.8, 007.1. Depende de: T-019.
   *Pronto quando:* com `Clock` avançado 24 h, aprovar retorna 410 **mesmo antes** do job, e
   depois do job o status é `EXPIRADO`, o e-mail foi enviado e `retention_deadline` = agora + 30 d.
