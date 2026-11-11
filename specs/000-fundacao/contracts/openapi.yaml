@@ -1187,6 +1187,7 @@ components:
             items:
               type: array
               items: { $ref: '#/components/schemas/Invitation' }
+      unevaluatedProperties: false
 
     # ───────── members ─────────
     Member:
@@ -1226,6 +1227,7 @@ components:
             items:
               type: array
               items: { $ref: '#/components/schemas/Member' }
+      unevaluatedProperties: false
     ApproveRequest:
       type: object
       required: [role, version]

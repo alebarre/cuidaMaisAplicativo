@@ -5,15 +5,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import br.com.cuidamais.auth.AccountPrincipal;
-import br.com.cuidamais.auth.JwtService;
-import br.com.cuidamais.auth.User;
-import br.com.cuidamais.auth.UserRepository;
-import br.com.cuidamais.membership.Membership;
-import br.com.cuidamais.membership.MembershipRepository;
-import br.com.cuidamais.membership.MembershipStatus;
-import br.com.cuidamais.membership.Role;
-import br.com.cuidamais.shared.Endereco;
+import br.com.cuidamais.auth.domain.AccountPrincipal;
+import br.com.cuidamais.auth.domain.User;
+import br.com.cuidamais.auth.repository.UserRepository;
+import br.com.cuidamais.auth.service.JwtService;
+import br.com.cuidamais.membership.domain.Membership;
+import br.com.cuidamais.membership.domain.MembershipStatus;
+import br.com.cuidamais.membership.domain.Role;
+import br.com.cuidamais.membership.repository.MembershipRepository;
+import br.com.cuidamais.shared.domain.Endereco;
 import br.com.cuidamais.shared.testsupport.ContractSchemas;
 import br.com.cuidamais.shared.testsupport.IntegrationTest;
 import br.com.cuidamais.shared.testsupport.MutableClock;
@@ -71,7 +71,7 @@ import org.springframework.web.bind.annotation.RestController;
  * <p><strong>Desenho esperado</strong> (a ser criado pelo implementador):
  *
  * <ul>
- *   <li>{@code br.com.cuidamais.auth.AccountPrincipal} — {@code record AccountPrincipal(UUID
+ *   <li>{@code br.com.cuidamais.auth.domain.AccountPrincipal} — {@code record AccountPrincipal(UUID
  *       userId, AccountState state)}; é o {@code Authentication#getPrincipal()} populado pelo
  *       filtro, resolvível por {@code @AuthenticationPrincipal}.
  *   <li>Filtro ({@code OncePerRequestFilter}) que lê {@code Authorization: Bearer <token>}, valida
@@ -513,13 +513,21 @@ class RequestAuthorizationTest extends IntegrationTest {
                 return bearer(outro.issue(user.getId(), t.clock));
             }
         },
-        /** JWT legítimo com um caractere da assinatura trocado. */
+        /**
+         * JWT legítimo com um caractere da assinatura trocado. Troca um caractere do MEIO da
+         * assinatura (os 6 bits contam), nunca o último: numa assinatura HS256 de 32 bytes o último
+         * caractere base64url tem 2 bits de preenchimento, e trocá-lo às vezes não altera os bytes
+         * (token continuaria válido, teste instável). O novo caractere é sempre diferente do original.
+         */
         ADULTERADO {
             @Override
             String header(RequestAuthorizationTest t, User user) {
                 String token = t.tokenDe(user);
-                char ultimo = token.charAt(token.length() - 1);
-                return bearer(token.substring(0, token.length() - 1) + (ultimo == 'A' ? 'B' : 'A'));
+                int inicioAssinatura = token.lastIndexOf('.') + 1;
+                int meio = inicioAssinatura + (token.length() - inicioAssinatura) / 2;
+                char original = token.charAt(meio);
+                char novo = original == 'A' ? 'B' : 'A';
+                return bearer(token.substring(0, meio) + novo + token.substring(meio + 1));
             }
         },
         /** JWT legítimo emitido há 16 minutos (validade de 15, D-11). */

@@ -30,7 +30,7 @@
   *Pronto quando:* `docker compose up` sobe os dois e a UI do Mailpit abre em `localhost:8025`.
 - [x] **T-002** Backend Spring Boot 4.1 / Java 25 (Maven): Web, Data JPA, Security, Validation,
   Flyway, Mail, PostgreSQL. Profiles `dev`, `test`, `prod`; bean `Clock` (D-10); pacotes por
-  domínio (D-01). *Pronto quando:* `mvn verify` passa com um teste de contexto.
+  domínio e papel (D-01 rev. 3). *Pronto quando:* `mvn verify` passa com um teste de contexto.
 - [x] **T-003** Base de teste de integração com Testcontainers (PostgreSQL + Mailpit) reutilizável
   por todas as classes de teste, com `Clock` substituível para avançar o tempo (D-10).
   *Pronto quando:* um teste sobe os containers, roda uma migração vazia e avança o relógio.
@@ -172,7 +172,7 @@ grupo deixa o banco vazio.
 
 ## Fase 4 — Convites, aprovação e membros
 
-- [ ] **T-040** Convites do Responsável: criar (409 `NO_ELDER` sem idoso, `ALREADY_MEMBER`,
+- [x] **T-040** Convites do Responsável: criar (409 `NO_ELDER` sem idoso, `ALREADY_MEMBER`,
   `EMAIL_UNAVAILABLE` para outro grupo ou conta sem grupo, reconvite permitido para
   `RECUSADO`/`EXPIRADO`/`REMOVIDO`, e-mail `ENVIADO` repetido = reenvio), listar (só admin, com
   `failedAttempts`, `blockedUntil`, `autoResends`), reenviar (201, zera tentativas e bloqueio),
@@ -181,7 +181,7 @@ grupo deixa o banco vazio.
   *Pronto quando:* um teste por `code` de conflito, um por status reenviável, um provando que o
   e-mail não contém o sobrenome do idoso, e um provando que reenviar durante o bloqueio o
   encerra na hora.
-- [ ] **T-041** `POST /invitations/redeem` (D-16, D-34): `next = REGISTER` com token de 15 min;
+- [x] **T-041** `POST /invitations/redeem` (D-16, D-34): `next = REGISTER` com token de 15 min;
   `next = REINSTATED` quando a conta existe no grupo (volta a `AGUARDANDO_APROVACAO`, senha
   antiga, prazo novo, e-mail ao Responsável); `400` idêntico com `remainingAttempts` para código
   errado e e-mail sem convite; `423` com `blockedUntil` na 5ª e durante 30 min mesmo com código
@@ -190,36 +190,39 @@ grupo deixa o banco vazio.
   *Pronto quando:* testes provam que e-mail sem convite e código errado recebem **bytes iguais**
   no corpo (exceto `instance`), que código errado para convite `VENCIDO` recebe 400 e não 410, e
   que o `REINSTATED` mantém a senha antiga.
-- [ ] **T-042** `POST /invitations/register` cria usuário (já com `email_verified_at` preenchido:
+- [x] **T-042** `POST /invitations/register` cria usuário (já com `email_verified_at` preenchido:
   o código de convite comprovou o e-mail, AC-004.3, D-33) + membership `AGUARDANDO_APROVACAO` com
   prazo de 24 h e dispara o e-mail ao Responsável. ACs: 004.2, 004.3, 004.4, 006.7.
-- [ ] **T-043** `GET /members`: sem `status` só `ATIVO` para qualquer membro; `status` só para
+  *Notas herdadas da T-041:* validar `typ=invite-registration` e os claims `email`/`inv` do
+  `registrationToken` (falta `JwtService.parseRegistrationToken`); marcar o convite `USADO` e zerar o
+  contador (`registerCodeUsed`) no mesmo passo; respeitar a ordem de locks de R-08.
+- [x] **T-043** `GET /members`: sem `status` só `ATIVO` para qualquer membro; `status` só para
   admin (403 para os demais); pendentes vencidos não aparecem; endereço, telefone e e-mail
   conforme a política (D-28, D-39). ACs: 006.2, 006.9, 009.5, 011.5, 011.8.
   *Pronto quando:* teste de API da matriz para Cuidador e Familiar nos três campos; Cuidador com
   `?status=REMOVIDO` recebe 403; Responsável vê telefone e endereço do `REMOVIDO`.
-- [ ] **T-044** `[P]` `GET /members/pending-count`. AC: 006.1.
-- [ ] **T-045** `approve` / `reject` com lock otimista (`version`, D-08), 410 `REQUEST_EXPIRED`
+- [x] **T-044** `[P]` `GET /members/pending-count`. AC: 006.1.
+- [x] **T-045** `approve` / `reject` com lock otimista (`version`, D-08), 410 `REQUEST_EXPIRED`
   para prazo vencido e e-mail do resultado. ACs: 006.3, 006.4, 006.6, 006.8, 007.1, 007.2.
   *Pronto quando:* teste com duas decisões simultâneas prova que só a primeira vale (a outra
   recebe 409); aprovar aos 24 h e 1 s recebe 410 antes do job rodar.
-- [ ] **T-046** Job de expiração de pedidos (D-09 item 1): `EXPIRADO` + e-mail +
+- [x] **T-046** Job de expiração de pedidos (D-09 item 1): `EXPIRADO` + e-mail +
   `retention_deadline`. ACs: 006.5, 006.8, 007.1. Depende de: T-019.
   *Pronto quando:* com `Clock` avançado 24 h, aprovar retorna 410 **mesmo antes** do job, e
   depois do job o status é `EXPIRADO`, o e-mail foi enviado e `retention_deadline` = agora + 30 d.
-- [ ] **T-047** `PATCH` (papel, vale na hora) e `DELETE` de membro (`REMOVIDO`, sessões
+- [x] **T-047** `PATCH` (papel, vale na hora) e `DELETE` de membro (`REMOVIDO`, sessões
   encerradas, dados preservados só para o admin); admin intocável.
   ACs: 009.1, 009.2, 009.3, 009.4, 014.2. *Pronto quando:* após `DELETE`, a linha continua no
   banco com nome, telefone e endereço; o refresh token do removido está revogado. (AC-009.3 é
   provado aqui pela preservação do nome; a visibilidade nos registros fica para as features
   001–008.)
-- [ ] **T-048** Job de reenvio automático (D-09 item 4): ao fim do bloqueio, se há convite
+- [x] **T-048** Job de reenvio automático (D-09 item 4): ao fim do bloqueio, se há convite
   `ENVIADO` e `auto_resends < 3`, cancela e cria outro com `origin = AUTO` e envia o e-mail; não
   faz nada se um convite manual foi criado durante o bloqueio. AC: 003.3.
   Depende de: T-018, T-019, T-040. *Pronto quando:* testes cobrem o 1º reenvio automático (novo
   código, prazo novo, e-mail no Mailpit), o 4º negado, e-mail sem convite (nada acontece) e o
   cancelamento do reenvio pendente por um reenvio manual.
-- [ ] **T-049** Job de retenção de contas `RECUSADO`/`EXPIRADO` (D-09 item 3): exclusão aos 30
+- [x] **T-049** Job de retenção de contas `RECUSADO`/`EXPIRADO` (D-09 item 3): exclusão aos 30
   dias com os convites do e-mail e e-mail curto; `retention_deadline` recalculado a cada convite
   criado e a cada convite que termina sem uso. AC: 014.1. Depende de: T-019, T-040.
   *Pronto quando:* testes com `Clock` provam a exclusão no dia 30, o reinício do prazo por convite
@@ -227,6 +230,13 @@ grupo deixa o banco vazio.
 
 **Checkpoint 4:** backend completo; todo AC de backend tem teste verde; contrato 100% coberto;
 os quatro jobs testados com relógio avançado.
+
+*Registro do Checkpoint 4:* "contrato 100% coberto" = as 30 operações têm teste de endpoint; 27
+validam a resposta com `matchesContract()` (inclui `PUT /me`, acrescentado ao fechar o checkpoint).
+Três ficam com a validação por schema (`ContractSchemas`) e conferência de status, tipo e bytes,
+exceção aceita pelo dono da spec: `DELETE /elders/{elderId}` (204 sem corpo; erros por schema
+`Problem`) e `GET`/`PUT`/`DELETE /elders/{elderId}/photo` (multipart/binário, que o validador
+OpenAPI do MockMvc não cobre).
 
 ## Fase 5 — Frontend (mobile-first)
 

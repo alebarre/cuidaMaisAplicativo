@@ -1,12 +1,12 @@
 package br.com.cuidamais.shared.security;
 
-import br.com.cuidamais.auth.AccountPrincipal;
-import br.com.cuidamais.auth.AccountState;
-import br.com.cuidamais.auth.JwtService;
-import br.com.cuidamais.auth.User;
-import br.com.cuidamais.auth.UserRepository;
-import br.com.cuidamais.membership.Membership;
-import br.com.cuidamais.membership.MembershipRepository;
+import br.com.cuidamais.auth.domain.AccountPrincipal;
+import br.com.cuidamais.auth.domain.AccountState;
+import br.com.cuidamais.auth.domain.User;
+import br.com.cuidamais.auth.repository.UserRepository;
+import br.com.cuidamais.auth.service.JwtService;
+import br.com.cuidamais.membership.domain.Membership;
+import br.com.cuidamais.membership.repository.MembershipRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

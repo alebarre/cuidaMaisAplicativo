@@ -1,9 +1,11 @@
 package br.com.cuidamais.shared.security;
 
-import br.com.cuidamais.auth.AccountPrincipal;
-import br.com.cuidamais.auth.AccountState;
-import br.com.cuidamais.auth.AccountStateValue;
-import br.com.cuidamais.shared.NotAllowedException;
+import br.com.cuidamais.auth.domain.AccountPrincipal;
+import br.com.cuidamais.auth.domain.AccountState;
+import br.com.cuidamais.auth.domain.AccountStateValue;
+import br.com.cuidamais.shared.exception.AccountStateException;
+import br.com.cuidamais.shared.exception.NotAllowedException;
+import br.com.cuidamais.shared.exception.UnauthorizedSessionException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.core.Authentication;

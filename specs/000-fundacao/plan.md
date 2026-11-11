@@ -5,6 +5,7 @@
 - **Status:** rev. 2, revisado contra a spec rev. 17; **aprovado por Alexandre em 2026-09-25**
 - **Histórico:** rev. 1 escrita para a spec rev. 9 (D-01 a D-32); rev. 2 atualiza D-02, D-05, D-07,
   D-09, D-11, D-13, D-14, D-15, D-16, D-20, D-27, D-28, D-31, D-32 e acrescenta D-33 a D-42.
+  D-01 rev. 3 (2026-10-29): subpacotes por papel dentro de cada domínio.
 
 > Aqui entram as decisões técnicas. Cada decisão importante tem um ID (`D-xx`) e indica
 > quais critérios de aceite (`AC-xxx`) atende. Decisões alteradas na rev. 2 trazem a marca
@@ -25,19 +26,26 @@
 | Testcontainers | 2.0.5 (BOM no `pom.xml`; o Boot 4 não gerencia mais a versão; módulos `testcontainers-postgresql`, `testcontainers-junit-jupiter`) |
 | Spring Boot (exato) | 4.1.1 · JDK Temurin 25.0.4.1 |
 
-## 2. Estrutura do backend (pacotes por domínio)
+## 2. Estrutura do backend (pacotes por domínio, camadas dentro)
 
 ```
 backend/src/main/java/br/com/cuidamais/
-├── shared/        (erros Problem Details, relógio, config, catálogo de mensagens)
+├── shared/        (config, security, jobs, exception [Problem Details], domain [Endereco])
 ├── auth/          (login, tokens, OTP, redefinição de senha, bloqueio de senha)
 ├── group/         (grupo de cuidado, idoso, exclusão do grupo)
 ├── membership/    (membros, convites, tentativas de código, aprovação, retenção)
 └── notification/  (envio de e-mails)
+    └── cada domínio: controller/ service/ repository/ domain/ dto/ exception/ job/ config/
+        (event/ listener/ em notification; util/ em auth) — só os subpacotes que tiverem conteúdo
 ```
 
-**D-01** Organização por domínio (e não por camada `controller/service/repository`), para que cada
-feature futura (001–008) seja um pacote novo e isolado.
+**D-01 (rev. 3)** Organização por domínio no primeiro nível, para que cada feature futura
+(001–008) seja um pacote novo e isolado, e **por papel (camada) dentro de cada domínio**
+(`controller`, `service`, `repository`, `domain`, `dto`, `exception`, `job`…), sem classes soltas
+na raiz do domínio. Regra detalhada e vinculante em `.claude/rules/backend-java-spring.md`.
+*Rev. 3 (2026-10-29, a pedido de Alexandre):* a rev. 1/2 dizia "por domínio e não por camada"; o
+resultado foi pacotes planos (ex. `auth/` com ~45 arquivos). Refatoração só de estrutura, sem
+mudança de comportamento (874 testes verdes antes e depois).
 
 ## 3. Modelo de dados
 
@@ -178,6 +186,35 @@ estado**: vive em `invite_code_attempts` (D-34).
      bloqueio ou entre o fim dele e a rodada do job, `blocked_until` já foi limpo (AC-003.9) e a
      linha não é selecionada. Cinco erros novos antes de o job rodar sobrescrevem `blocked_until`:
      sai um reenvio, não dois.
+  *Esclarecimentos registrados na T-048 (reenvio automático, AC-003.3):* (1) o job reenvia só o
+  convite `ENVIADO` **vigente mais recente** do e-mail (se houver `ENVIADO` em mais de um grupo,
+  os demais ficam intactos); um `ENVIADO` já vencido pelo relógio conta como "sem convite" e só
+  descarta o reenvio. (2) O hash BCrypt do código novo é calculado **com o contador do e-mail
+  travado** (a linha é reivindicada com `SKIP LOCKED` e o convite novo precisa nascer na mesma
+  transação): com até 200 linhas por rodada, no pior caso um `redeem`/`resend` do último e-mail
+  da rodada espera cerca de 15 a 20 s; o teto é limitado (`MAX_ROWS`), não é negação de serviço
+  permanente, e é aceito no MVP (exceção consciente à prática de manter o BCrypt fora do lock do
+  contador, descrita no `InviteCodeAttemptsLocker` e nos serviços; reduzir `MAX_ROWS` é o ajuste se isso incomodar). (3) `InvitationService.resend` cancela
+  também os **outros** `ENVIADO` vigentes do mesmo grupo e e-mail (passo extra), para que a
+  corrida entre o job e o reenvio manual nunca deixe dois convites ativos. (4) Quando o teto de 3
+  é atingido, o job registra um log de aplicação de mensagem fixa e sem dado pessoal (R-04). (5)
+  O código de 6 dígitos é gerado por `InvitationCodeGenerator` (`SecureRandom`, `%06d`).
+  *Esclarecimentos registrados na T-049 (retenção de `RECUSADO`/`EXPIRADO`, AC-014.1):*
+  (1) o "recálculo" de `retention_deadline` por convite é **derivado na rotina**, não gravado nos
+  fluxos de convite: nenhum job marca convite `VENCIDO` no banco (o estado é derivado do relógio,
+  D-09), então a rotina calcula o prazo efetivo a partir dos convites do e-mail (qualquer grupo):
+  `createdAt + 30 d` (envio, reenvio manual ou automático), `cancelledAt + 30 d` (`CANCELADO`) e
+  `expiresAt + 30 d` (`VENCIDO`, ou `ENVIADO` já vencido pelo relógio; um `ENVIADO` vigente
+  bloqueia a exclusão). A conta é excluída quando `retention_deadline` (ou `decided_at + 30 d`
+  se for nulo, legado) **e** todos esses prazos já passaram (borda fechada, `<=`).
+  (2) `Membership.reject` passa a gravar `retention_deadline = agora + 30 d`, como `expire`
+  (AC-014.1 conta também a partir de `RECUSADO`). (3) Na exclusão a rotina apaga usuário,
+  vínculo, todos os convites do e-mail e a linha de `invite_code_attempts` do e-mail, e publica
+  `AccountDeletedEmail` na transação (D-23). (4) Ordem de locks (R-08): por candidato, trava o
+  contador do e-mail primeiro e **reconfere a elegibilidade sob o lock** antes de apagar, de modo
+  que um convite criado ou cancelado ao mesmo tempo (os serviços de convite também travam o
+  contador antes de escrever) impede a exclusão ou ocorre depois dela; candidatos em ordem de
+  e-mail, `MAX_ROWS` 200, `SKIP LOCKED` (D-42).
 - **D-10** Um `Clock` injetável em todo lugar que usa hora, para testar prazos (15 min, 30 min,
   24 h, 7 dias, 30 dias) sem esperar.
 
@@ -375,6 +412,17 @@ Cada teste traz o ID do critério no nome ou comentário, por exemplo
   órfão; a retrospectiva de cada feature futura deve conferir isso.
 - **R-06** O agendador de D-09 roda em uma instância só no MVP; se houver mais de uma réplica,
   precisará de lock distribuído (ShedLock ou equivalente). Registrado, não implementado.
+  *Nota (T-041):* o rate limit por IP de `redeem` (R-03) também é em memória do processo e vale só
+  numa instância; com várias réplicas precisará de store compartilhado (ex. Redis). Atrás de proxy
+  reverso, `getRemoteAddr()` devolve o IP do proxy — antes de produção, configurar proxy confiável
+  (`server.forward-headers-strategy`) para que o limite seja por cliente e não global.
+- **R-07** *(T-041)* Canal de tempo residual em `redeem`: o custo de BCrypt é proporcional ao
+  número de convites do e-mail (e-mail sem convite gasta um `matches` contra um hash fictício).
+  Quem mede tempo de resposta distingue "1 convite" de "vários", mas não "sem convite" de "com
+  convite". Aceito no MVP; mitigação futura: custo fixo de N `matches` por pedido.
+- **R-08** *(T-041)* O contador de `invite_code_attempts` é travado com lock pessimista de linha,
+  em ordem global `invite_code_attempts → invitations → memberships`; qualquer código novo que
+  escreva nessas tabelas deve respeitá-la para não criar deadlock.
 - **D-42** Todos os jobs de D-09 são **idempotentes** e usam `SELECT ... FOR UPDATE SKIP LOCKED`
   nas linhas que processam, para que uma rodada atrasada ou repetida nunca envie e-mail em dobro.
   *Esclarecimentos registrados na T-019:* (1) a infra vive em `shared.jobs`: `ScheduledRoutine`
