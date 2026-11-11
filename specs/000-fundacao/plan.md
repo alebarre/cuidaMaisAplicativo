@@ -186,6 +186,22 @@ estado**: vive em `invite_code_attempts` (D-34).
      bloqueio ou entre o fim dele e a rodada do job, `blocked_until` já foi limpo (AC-003.9) e a
      linha não é selecionada. Cinco erros novos antes de o job rodar sobrescrevem `blocked_until`:
      sai um reenvio, não dois.
+  *Esclarecimentos registrados na T-049 (retenção de `RECUSADO`/`EXPIRADO`, AC-014.1):*
+  (1) o "recálculo" de `retention_deadline` por convite é **derivado na rotina**, não gravado nos
+  fluxos de convite: nenhum job marca convite `VENCIDO` no banco (o estado é derivado do relógio,
+  D-09), então a rotina calcula o prazo efetivo a partir dos convites do e-mail (qualquer grupo):
+  `createdAt + 30 d` (envio, reenvio manual ou automático), `cancelledAt + 30 d` (`CANCELADO`) e
+  `expiresAt + 30 d` (`VENCIDO`, ou `ENVIADO` já vencido pelo relógio; um `ENVIADO` vigente
+  bloqueia a exclusão). A conta é excluída quando `retention_deadline` (ou `decided_at + 30 d`
+  se for nulo, legado) **e** todos esses prazos já passaram (borda fechada, `<=`).
+  (2) `Membership.reject` passa a gravar `retention_deadline = agora + 30 d`, como `expire`
+  (AC-014.1 conta também a partir de `RECUSADO`). (3) Na exclusão a rotina apaga usuário,
+  vínculo, todos os convites do e-mail e a linha de `invite_code_attempts` do e-mail, e publica
+  `AccountDeletedEmail` na transação (D-23). (4) Ordem de locks (R-08): por candidato, trava o
+  contador do e-mail primeiro e **reconfere a elegibilidade sob o lock** antes de apagar, de modo
+  que um convite criado ou cancelado ao mesmo tempo (os serviços de convite também travam o
+  contador antes de escrever) impede a exclusão ou ocorre depois dela; candidatos em ordem de
+  e-mail, `MAX_ROWS` 200, `SKIP LOCKED` (D-42).
 - **D-10** Um `Clock` injetável em todo lugar que usa hora, para testar prazos (15 min, 30 min,
   24 h, 7 dias, 30 dias) sem esperar.
 

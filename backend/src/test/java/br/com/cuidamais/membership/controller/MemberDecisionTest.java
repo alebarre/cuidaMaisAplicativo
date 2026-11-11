@@ -249,6 +249,40 @@ class MemberDecisionTest extends IntegrationTest {
                 .isEqualTo(g.responsavel().getId());
     }
 
+    /**
+     * AC-014.1 (T-049, fecha a lacuna do reject da T-045): recusar pela API grava
+     * retention_deadline = o instante da recusa + 30 dias exatos (a contagem da retencao parte da
+     * recusa). Antes da recusa a coluna e nula.
+     */
+    @Test
+    @DisplayName("AC-014.1: recusar grava retention_deadline = instante da recusa + 30 dias")
+    void ac_014_1_recusar_grava_retention_deadline() throws Exception {
+        Grupo g = grupo();
+        Pedido p = pedido(g, "RecusadaRetida");
+        assertThat(retentionDeadline(p)).as("pre-condicao: nula antes da recusa").isNull();
+        java.time.Instant instanteDaRecusa = clock.instant();
+
+        esperar200(recusar(g, p, g.responsavel()));
+
+        assertThat(retentionDeadline(p)).isEqualTo(instanteDaRecusa.plus(Duration.ofDays(30)));
+    }
+
+    /**
+     * AC-014.2: aprovar NAO grava retention_deadline (so RECUSADO/EXPIRADO tem retencao; um membro
+     * ATIVO, e depois REMOVIDO, nunca e excluido automaticamente).
+     */
+    @Test
+    @DisplayName("AC-014.2: aprovar não grava retention_deadline")
+    void ac_014_2_aprovar_nao_grava_retention_deadline() throws Exception {
+        Grupo g = grupo();
+        Pedido p = pedido(g, "AprovadaSemRetencao");
+        long versao = versaoAtual(p);
+
+        esperar200(aprovar(g, p, g.responsavel(), Role.CUIDADOR, versao));
+
+        assertThat(retentionDeadline(p)).isNull();
+    }
+
     /** Recusado nao ganha acesso ao grupo: o GET /members dele continua negado (403 ACCOUNT_STATE). */
     @Test
     @DisplayName("AC-006.4: recusado continua sem acesso ao grupo")
@@ -779,6 +813,13 @@ class MemberDecisionTest extends IntegrationTest {
 
     private String statusNoBanco(Pedido p) {
         return jdbc.queryForObject("SELECT status FROM memberships WHERE id = ?", String.class, p.memberId());
+    }
+
+    /** retention_deadline lida por JDBC; nula quando a coluna e NULL. */
+    private java.time.Instant retentionDeadline(Pedido p) {
+        java.sql.Timestamp t = jdbc.queryForObject(
+                "SELECT retention_deadline FROM memberships WHERE id = ?", java.sql.Timestamp.class, p.memberId());
+        return t == null ? null : t.toInstant();
     }
 
     private long versaoAtual(Pedido p) {

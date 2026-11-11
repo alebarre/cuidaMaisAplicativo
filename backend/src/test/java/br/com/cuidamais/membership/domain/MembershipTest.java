@@ -20,6 +20,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * T-012 "Pronto quando": um {@code @ParameterizedTest} com cada linha da tabela de AC-012.1 que
@@ -699,8 +700,106 @@ class MembershipTest {
 
         assertThat(m.getStatus()).isEqualTo(de);
         assertThat(m.getRetentionDeadline()).isEqualTo(antes);
-        if (de != MembershipStatus.EXPIRADO) {
-            assertThat(m.getRetentionDeadline()).as("só quem expirou tem retenção").isNull();
+        // T-049 (AC-014.1): RECUSADO passa a ter retention_deadline, como EXPIRADO; só quem nunca foi
+        // recusado nem expirou (ATIVO, REMOVIDO) segue sem retenção.
+        if (de == MembershipStatus.ATIVO || de == MembershipStatus.REMOVIDO) {
+            assertThat(m.getRetentionDeadline()).as("só RECUSADO/EXPIRADO têm retenção").isNull();
         }
+    }
+
+    // ------------------------------------------------------------------ T-049: retention_deadline na recusa
+
+    /**
+     * AC-014.1 (T-049, fecha a lacuna do reject da T-045): recusar grava retention_deadline = o
+     * instante da recusa + 30 dias exatos, como {@code expire} já faz. Cada linha: quantas horas
+     * depois do pedido o Responsável recusa (a contagem parte da recusa, não de requestedAt nem de
+     * expiresAt).
+     */
+    @ParameterizedTest(name = "AC-014.1 recusar {0} h depois do pedido grava retention_deadline = recusa + 30 dias")
+    @ValueSource(longs = {0, 1, 23})
+    @DisplayName("AC-014.1 reject(decidedBy, clock) grava retention_deadline = agora + 30 dias")
+    void ac_014_1_reject_grava_retention_deadline_em_30_dias(long horasDepoisDoPedido) {
+        Membership m = Membership.request(GROUP_ID, USER_ID, clock);
+        assertThat(m.getRetentionDeadline()).as("pré-condição: nulo antes da recusa").isNull();
+        // Cenário: a recusa acontece horasDepoisDoPedido h depois do pedido (linhas 0, 1 e 23 h).
+        clock.advance(Duration.ofHours(horasDepoisDoPedido));
+        Instant instanteDaRecusa = clock.instant();
+
+        m.reject(ADMIN_ID, clock);
+
+        assertThat(m.getStatus()).isEqualTo(MembershipStatus.RECUSADO);
+        assertThat(m.getRetentionDeadline()).isEqualTo(instanteDaRecusa.plus(Duration.ofDays(30)));
+    }
+
+    /**
+     * AC-014.1: a recusa também grava decidedAt, e o prazo de retenção é decidedAt + 30 dias (a mesma
+     * data base que a rotina usa como fallback para RECUSADO legado, sem retention_deadline).
+     */
+    @Test
+    @DisplayName("AC-014.1 retention_deadline da recusa = decidedAt + 30 dias")
+    void ac_014_1_reject_retention_deadline_e_decided_at_mais_30_dias() {
+        Membership m = Membership.request(GROUP_ID, USER_ID, clock);
+        clock.advance(Duration.ofHours(7));
+
+        m.reject(ADMIN_ID, clock);
+
+        assertThat(m.getRetentionDeadline()).isEqualTo(m.getDecidedAt().plus(Duration.ofDays(30)));
+    }
+
+    /**
+     * AC-006.8 / D-07: recusar um pedido vencido (24 h exatas) continua rejeitado e não grava
+     * retention_deadline nem muda o status (uma chamada rejeitada não altera nenhum campo).
+     */
+    @Test
+    @DisplayName("AC-006.8 reject() de pedido vencido lança exceção e não grava retention_deadline")
+    void ac_006_8_reject_vencido_nao_grava_retention_deadline() {
+        Membership m = Membership.request(GROUP_ID, USER_ID, clock);
+        clock.advance(PRAZO_APROVACAO);
+
+        assertThatThrownBy(() -> m.reject(ADMIN_ID, clock)).isInstanceOf(IllegalStateException.class);
+
+        assertThat(m.getStatus()).isEqualTo(MembershipStatus.AGUARDANDO_APROVACAO);
+        assertThat(m.getRetentionDeadline()).isNull();
+    }
+
+    /**
+     * D-07: recusar de novo um RECUSADO/EXPIRADO (ou recusar ATIVO/REMOVIDO) lança exceção e preserva
+     * o retention_deadline da 1a transição (para ATIVO/REMOVIDO segue nulo). Cada linha: o estado de partida.
+     */
+    @ParameterizedTest(name = "AC-014.1 recusar a partir de {0} não altera retention_deadline")
+    @EnumSource(
+            value = MembershipStatus.class,
+            names = {"ATIVO", "RECUSADO", "EXPIRADO", "REMOVIDO"})
+    @DisplayName("AC-014.1 / D-07 reject() fora de AGUARDANDO_APROVACAO lança exceção e preserva retention_deadline")
+    void ac_014_1_reject_fora_de_aguardando_preserva_retention_deadline(MembershipStatus de) {
+        Membership m = memberIn(de, clock);
+        Instant antes = m.getRetentionDeadline();
+        clock.advance(Duration.ofDays(3));
+
+        assertThatThrownBy(() -> m.reject(ADMIN_ID, clock)).isInstanceOf(IllegalStateException.class);
+
+        assertThat(m.getStatus()).isEqualTo(de);
+        assertThat(m.getRetentionDeadline()).isEqualTo(antes);
+    }
+
+    // ------------------------------------------------------------------ T-049: AC-014.2 REMOVIDO não tem retenção
+
+    /**
+     * AC-014.2: aprovar e remover um membro NÃO gravam retention_deadline (a conta REMOVIDO nunca é
+     * excluída automaticamente; a coluna fica nula).
+     */
+    @Test
+    @DisplayName("AC-014.2 aprovar e remover não gravam retention_deadline (REMOVIDO nunca é excluído)")
+    void ac_014_2_aprovar_e_remover_nao_gravam_retention_deadline() {
+        Membership m = Membership.request(GROUP_ID, USER_ID, clock);
+
+        // Etapa 1: aprovado.
+        m.approve(Role.CUIDADOR, ADMIN_ID, clock);
+        assertThat(m.getRetentionDeadline()).as("ATIVO sem retenção").isNull();
+
+        // Etapa 2: removido.
+        m.remove(clock);
+        assertThat(m.getStatus()).isEqualTo(MembershipStatus.REMOVIDO);
+        assertThat(m.getRetentionDeadline()).as("REMOVIDO sem retenção").isNull();
     }
 }

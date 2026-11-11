@@ -222,7 +222,7 @@ grupo deixa o banco vazio.
   Depende de: T-018, T-019, T-040. *Pronto quando:* testes cobrem o 1º reenvio automático (novo
   código, prazo novo, e-mail no Mailpit), o 4º negado, e-mail sem convite (nada acontece) e o
   cancelamento do reenvio pendente por um reenvio manual.
-- [ ] **T-049** Job de retenção de contas `RECUSADO`/`EXPIRADO` (D-09 item 3): exclusão aos 30
+- [x] **T-049** Job de retenção de contas `RECUSADO`/`EXPIRADO` (D-09 item 3): exclusão aos 30
   dias com os convites do e-mail e e-mail curto; `retention_deadline` recalculado a cada convite
   criado e a cada convite que termina sem uso. AC: 014.1. Depende de: T-019, T-040.
   *Pronto quando:* testes com `Clock` provam a exclusão no dia 30, o reinício do prazo por convite

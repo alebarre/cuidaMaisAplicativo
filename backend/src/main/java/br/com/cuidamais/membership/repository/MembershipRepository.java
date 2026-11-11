@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -72,4 +73,45 @@ public interface MembershipRepository extends JpaRepository<Membership, UUID> {
             + " and m.status = br.com.cuidamais.membership.domain.MembershipStatus.AGUARDANDO_APROVACAO"
             + VIGENTE)
     long countPendingVigentes(@Param("groupId") UUID groupId, @Param("now") Instant now);
+
+    /**
+     * Trecho JPQL (T-049, AC-014.1) da condição "membership recusada/expirada com a base de
+     * retenção vencida": status {@code RECUSADO}/{@code EXPIRADO} e {@code retention_deadline <=
+     * :agora}, ou, no legado sem prazo gravado, {@code decided_at <= :corte} (decided_at + 30 d <=
+     * agora). Sem nenhuma das duas datas a conta nunca é elegível. Alias da membership: {@code m}.
+     */
+    String NAO_APROVADA_COM_BASE_VENCIDA = " m.status in ("
+            + "br.com.cuidamais.membership.domain.MembershipStatus.RECUSADO,"
+            + "br.com.cuidamais.membership.domain.MembershipStatus.EXPIRADO)"
+            + " and (m.retentionDeadline <= :agora or (m.retentionDeadline is null and m.decidedAt <= :corte))";
+
+    /**
+     * Início do trecho JPQL "nenhum convite do e-mail segura o prazo" (AC-014.1, D-09 T-049); o
+     * chamador concatena a expressão do e-mail e {@link #FIM_SEM_CONVITE_QUE_SEGURA}. Um convite
+     * segura a conta se foi criado depois do corte, ou cancelado depois do corte, ou se está
+     * {@code ENVIADO}/{@code VENCIDO} com {@code expiresAt} depois do corte ({@code corte = agora
+     * - 30 d}; {@code CANCELADO} conta só pelo {@code cancelledAt}). Vale para qualquer grupo.
+     */
+    String INICIO_SEM_CONVITE_QUE_SEGURA =
+            " and not exists (select 1 from Invitation i where i.email = ";
+
+    /** Fim do trecho iniciado em {@link #INICIO_SEM_CONVITE_QUE_SEGURA}. */
+    String FIM_SEM_CONVITE_QUE_SEGURA = " and (i.createdAt > :corte or i.cancelledAt > :corte"
+            + " or (i.status in ('ENVIADO', 'VENCIDO') and i.expiresAt > :corte)))";
+
+    /**
+     * Consulta (T-049, sem lock) dos e-mails das contas elegíveis à exclusão por retenção: membership
+     * {@code RECUSADO}/{@code EXPIRADO} com base vencida e nenhum convite do e-mail segurando o prazo
+     * ({@link #NAO_APROVADA_COM_BASE_VENCIDA}, {@link #INICIO_SEM_CONVITE_QUE_SEGURA}). Ordenada por
+     * e-mail (ordem determinística de locks, D-42) e limitada por {@code limit}; o mesmo critério no
+     * filtro evita que linhas inelegíveis ocupem as vagas da rodada. A rotina reconfere sob lock.
+     *
+     * @param agora instante atual do relógio do contexto
+     * @param corte {@code agora - 30 dias}
+     */
+    @Query("select u.email from Membership m, User u where u.id = m.userId and"
+            + NAO_APROVADA_COM_BASE_VENCIDA + INICIO_SEM_CONVITE_QUE_SEGURA + "u.email"
+            + FIM_SEM_CONVITE_QUE_SEGURA + " order by u.email")
+    List<String> findEmailsElegiveisRetencao(
+            @Param("agora") Instant agora, @Param("corte") Instant corte, Limit limit);
 }

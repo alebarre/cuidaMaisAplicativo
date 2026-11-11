@@ -397,12 +397,14 @@ class ExpiracaoPedidosTest extends IntegrationTest {
         umEmail(p.user().getEmail());
         // Etapa 2: segunda rodada imediata, no mesmo instante.
         runner.runAll();
-        // Etapa 3: rodadas posteriores, com o relogio avancando (5 min, 1 dia, 29 dias).
+        // Etapa 3: rodadas posteriores, com o relogio avancando (5 min, 1 dia, 20 dias). O total
+        // fica abaixo de 30 dias: a partir dai a conta EXPIRADO e excluida pela retencao (T-049,
+        // AC-014.1), o que este teste nao trata.
         clock.advance(Duration.ofMinutes(5));
         runner.runAll();
         clock.advance(Duration.ofDays(1));
         runner.runAll();
-        clock.advance(Duration.ofDays(29));
+        clock.advance(Duration.ofDays(20));
         runner.runAll();
 
         assertThat(statusNoBanco(p)).isEqualTo("EXPIRADO");

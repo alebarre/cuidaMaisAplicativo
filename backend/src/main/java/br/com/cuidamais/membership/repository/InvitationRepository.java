@@ -9,6 +9,7 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -59,4 +60,17 @@ public interface InvitationRepository extends JpaRepository<Invitation, UUID> {
             + " or (i.status = 'ENVIADO' and i.expiresAt <= :now))")
     Page<Invitation> findExpired(
             @Param("groupId") UUID groupId, @Param("now") Instant now, Pageable pageable);
+
+    /**
+     * Apaga TODOS os convites de um e-mail, em qualquer grupo e status (T-049, AC-014.1): parte da
+     * exclusão da conta recusada/expirada por retenção. É um delete em massa (um único comando),
+     * que antes descarrega as mudanças pendentes; deve rodar sob o lock do contador do e-mail
+     * (R-08) e antes de apagar o usuário (as linhas referenciam {@code users} por {@code
+     * created_by}).
+     *
+     * @return quantos convites foram apagados
+     */
+    @Modifying(flushAutomatically = true)
+    @Query("delete from Invitation i where i.email = :email")
+    int deleteByEmail(@Param("email") String email);
 }

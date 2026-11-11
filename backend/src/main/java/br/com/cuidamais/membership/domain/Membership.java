@@ -83,9 +83,11 @@ public class Membership {
     private Instant decidedAt;
 
     /**
-     * Instante a partir do qual os dados de um pedido {@code EXPIRADO} podem ser excluídos
-     * (AC-014.1). Nulo enquanto a membership não expirou; gravado uma única vez por {@link
-     * #expire(Clock)}. A exclusão em si é a T-049; aqui só se persiste o prazo.
+     * Instante a partir do qual os dados de um pedido {@code RECUSADO} ou {@code EXPIRADO} podem
+     * ser excluídos (AC-014.1). Nulo enquanto a membership não foi recusada nem expirou (e em
+     * registros legados anteriores à T-049); gravado por {@link #reject(UUID, Clock)} e {@link
+     * #expire(Clock)}. A exclusão em si é da rotina de retenção (T-049), que ainda considera os
+     * convites do e-mail.
      */
     @Column(name = "retention_deadline")
     private Instant retentionDeadline;
@@ -149,11 +151,21 @@ public class Membership {
     /**
      * Responsável recusa o pedido (AC-006.4). Mesma janela de validade de {@link #approve}
      * (AC-006.8).
+     *
+     * <p>Grava também {@code retention_deadline = decidedAt + 30 dias} (AC-014.1, T-049): a conta
+     * recusada passa a ter prazo de retenção como a expirada. Usa o MESMO instante {@code
+     * clock.instant()} de {@code decidedAt}, então o prazo é exatamente {@code decidedAt + 30 d}
+     * (a data-base que a rotina de retenção usa como fallback no legado). Uma chamada rejeitada
+     * não altera nenhum campo.
      */
     public void reject(UUID decidedBy, Clock clock) {
+        // 1. só decide pedido pendente e dentro do prazo (lança antes de alterar qualquer campo).
         requirePendenteDentroDoPrazo(clock);
+        // 2. um único instante para a decisão e para o prazo de retenção.
+        Instant agora = clock.instant();
         this.decidedBy = decidedBy;
-        this.decidedAt = clock.instant();
+        this.decidedAt = agora;
+        this.retentionDeadline = agora.plus(PRAZO_RETENCAO);
         this.status = MembershipStatus.RECUSADO;
     }
 
@@ -278,9 +290,9 @@ public class Membership {
     }
 
     /**
-     * Prazo de retenção do pedido expirado (AC-014.1): {@code instante da expiração + 30 dias}, ou
-     * {@code null} para quem nunca expirou. É o que a rotina de retenção (T-049) compara com o
-     * "agora" para decidir a exclusão dos dados da pessoa.
+     * Prazo de retenção do pedido recusado ou expirado (AC-014.1): {@code instante da recusa/expiração
+     * + 30 dias}, ou {@code null} para quem nunca foi recusado nem expirou. É o que a rotina de
+     * retenção (T-049) compara com o "agora" para decidir a exclusão dos dados da pessoa.
      */
     public Instant getRetentionDeadline() {
         return retentionDeadline;
