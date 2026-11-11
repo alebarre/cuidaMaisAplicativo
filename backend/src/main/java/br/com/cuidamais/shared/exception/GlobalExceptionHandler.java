@@ -21,6 +21,8 @@ import java.net.URI;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.MessageSourceResolvable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -58,6 +60,8 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     private static final URI VALIDATION_ERROR_TYPE = URI.create("/problems/validation-error");
     private static final URI NOT_ALLOWED_TYPE = URI.create("/problems/not-allowed");
@@ -461,11 +465,14 @@ public class GlobalExceptionHandler {
 
     /**
      * Fallback para qualquer exceção não tratada: garante que nenhum stack trace ou mensagem
-     * crua escape em produção (P5), mesmo para erros imprevistos.
+     * crua escape em produção (P5), mesmo para erros imprevistos. Deixa rastro em log só com o
+     * <em>tipo</em> da exceção: a mensagem e a pilha podem carregar dado pessoal e por isso nunca
+     * são registradas.
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ProblemDetail> handleUnexpected(
             Exception exception, HttpServletRequest request) {
+        log.error("Erro inesperado ao tratar a requisição: {}", exception.getClass().getName());
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.INTERNAL_SERVER_ERROR, "Ocorreu um erro inesperado.");
         problem.setType(INTERNAL_ERROR_TYPE);

@@ -13,6 +13,9 @@ import com.networknt.schema.Error;
 import jakarta.validation.constraints.NotBlank;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -40,6 +43,7 @@ import org.springframework.web.bind.annotation.RestController;
  * teste via {@code com.atlassian.oai:openapi-request-validator-mockmvc}, T-006) — abordagem
  * rigorosa preferida no lugar da alternativa manual de asserções campo a campo.
  */
+@ExtendWith(OutputCaptureExtension.class)
 class GlobalExceptionHandlerTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -129,6 +133,26 @@ class GlobalExceptionHandlerTest {
     }
 
     /**
+     * P5 / diagnóstico: um erro inesperado (500) deixa rastro em log só com o <em>tipo</em> da
+     * exceção, nunca com a mensagem (que pode carregar e-mail, nome ou outro dado pessoal), e o
+     * corpo devolvido ao cliente continua genérico, sem a mensagem nem a pilha.
+     */
+    @Test
+    void erroInesperadoRegistraSoOTipoDaExcecaoNoLogESemVazarMensagem(CapturedOutput output) throws Exception {
+        MvcResult result = mockMvc.perform(get("/teste/erro-inesperado"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andReturn();
+
+        String corpo = result.getResponse().getContentAsString();
+        assertThat(corpo).doesNotContain("fulano@exemplo.com").doesNotContain("IllegalStateException");
+        assertThat(output.getAll())
+                .contains("IllegalStateException")
+                .doesNotContain("fulano@exemplo.com")
+                .doesNotContain("at br.com.cuidamais");
+    }
+
+    /**
      * Controller só de teste (nunca em {@code src/main}), análogo a
      * {@code ContractValidationTest.RotaForaDoContratoController} (T-006): simula as situações do
      * "Pronto quando" da T-007 sem precisar de nenhum endpoint real (que só chega na Fase 2).
@@ -153,6 +177,12 @@ class GlobalExceptionHandlerTest {
         @org.springframework.web.bind.annotation.GetMapping("/outro-grupo")
         void outroGrupo() {
             throw new ResourceNotFoundException();
+        }
+
+        /** Erro não previsto: cai no fallback 500 do handler. */
+        @org.springframework.web.bind.annotation.GetMapping("/erro-inesperado")
+        void erroInesperado() {
+            throw new IllegalStateException("fulano@exemplo.com");
         }
 
         /** AC-015.3: recurso que não existe — mesma exceção que "outro grupo". */

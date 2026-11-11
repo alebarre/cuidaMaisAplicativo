@@ -203,6 +203,7 @@ class MeTest extends IntegrationTest {
 
         MvcResult result = mockMvc.perform(atualizar(corpoAtualizacao(telefoneNovo, enderecoNovo), user))
                 .andExpect(status().isOk())
+                .andExpect(ContractValidation.matchesContract())
                 .andReturn();
         JsonNode corpoDoPut = json.readTree(result.getResponse().getContentAsString());
         // etapa 1: a resposta do PUT já reflete os valores novos.

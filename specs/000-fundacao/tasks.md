@@ -231,6 +231,13 @@ grupo deixa o banco vazio.
 **Checkpoint 4:** backend completo; todo AC de backend tem teste verde; contrato 100% coberto;
 os quatro jobs testados com relógio avançado.
 
+*Registro do Checkpoint 4:* "contrato 100% coberto" = as 30 operações têm teste de endpoint; 27
+validam a resposta com `matchesContract()` (inclui `PUT /me`, acrescentado ao fechar o checkpoint).
+Três ficam com a validação por schema (`ContractSchemas`) e conferência de status, tipo e bytes,
+exceção aceita pelo dono da spec: `DELETE /elders/{elderId}` (204 sem corpo; erros por schema
+`Problem`) e `GET`/`PUT`/`DELETE /elders/{elderId}/photo` (multipart/binário, que o validador
+OpenAPI do MockMvc não cobre).
+
 ## Fase 5 — Frontend (mobile-first)
 
 - [ ] **T-050** Core: interceptor que injeta o access token e renova via `/auth/refresh` no 401;
