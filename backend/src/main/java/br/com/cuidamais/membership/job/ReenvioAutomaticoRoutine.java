@@ -19,6 +19,8 @@ import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -27,7 +29,9 @@ import org.springframework.stereotype.Component;
  * Rotina agendada (T-048, plan D-09 rev. 2, item 4) do reenvio automático de convite (AC-003.3):
  * quando o bloqueio de 30 minutos por 5 códigos errados termina, o e-mail bloqueado recebe, se
  * ainda houver convite {@code ENVIADO} vigente, um convite novo (código novo, prazo novo de 7
- * dias, {@code origin = AUTO}) no lugar do antigo, até 3 vezes (o 4º é negado).
+ * dias, {@code origin = AUTO}) no lugar do antigo, até 3 vezes (o 4º é negado). A negação pelo teto
+ * (R-04) deixa um único log INFO de mensagem fixa, para a operação perceber que o teto foi
+ * atingido, sem nenhum dado pessoal (P5: nada de e-mail, código, nome nem identificadores).
  *
  * <p>Seleciona as linhas de {@code invite_code_attempts} com {@code blocked_until <= agora}
  * (<strong>só</strong> esse predicado, borda fechada: o contador já vale zero na leitura e erros do
@@ -55,6 +59,9 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class ReenvioAutomaticoRoutine implements ScheduledRoutine {
+
+    /** Logger da rotina; só recebe mensagens fixas, sem dado pessoal (P5). */
+    private static final Logger log = LoggerFactory.getLogger(ReenvioAutomaticoRoutine.class);
 
     /**
      * Limite de contadores tratados por rodada (mesmo valor e justificativa das demais rotinas de
@@ -121,7 +128,8 @@ public class ReenvioAutomaticoRoutine implements ScheduledRoutine {
     }
 
     /**
-     * Trata o reenvio devido de um e-mail: reenvia, nega pelo teto ou descarta se não há convite.
+     * Trata o reenvio devido de um e-mail: reenvia, nega pelo teto (com o log fixo de R-04) ou
+     * descarta se não há convite (sem log e sem gastar o teto).
      */
     private void tratar(InviteCodeAttempts attempts, Clock clock) {
         String email = attempts.getEmail();
@@ -147,6 +155,9 @@ public class ReenvioAutomaticoRoutine implements ScheduledRoutine {
 
         // 3. decide pelo teto de 3 (domínio): o 4º é negado, sem e-mail, convite intacto.
         if (!attempts.consumeAutoResend(clock)) {
+            // 3a. R-04: registra a negação com mensagem fixa e sem argumentos (P5: nenhum dado
+            // pessoal, nem e-mail, código, nome ou id), só para a operação enxergar o teto.
+            log.info("Reenvio automático negado: teto de reenvios automáticos atingido (R-04)");
             attemptsRepository.save(attempts);
             return;
         }

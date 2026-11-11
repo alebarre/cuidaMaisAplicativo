@@ -186,6 +186,19 @@ estado**: vive em `invite_code_attempts` (D-34).
      bloqueio ou entre o fim dele e a rodada do job, `blocked_until` já foi limpo (AC-003.9) e a
      linha não é selecionada. Cinco erros novos antes de o job rodar sobrescrevem `blocked_until`:
      sai um reenvio, não dois.
+  *Esclarecimentos registrados na T-048 (reenvio automático, AC-003.3):* (1) o job reenvia só o
+  convite `ENVIADO` **vigente mais recente** do e-mail (se houver `ENVIADO` em mais de um grupo,
+  os demais ficam intactos); um `ENVIADO` já vencido pelo relógio conta como "sem convite" e só
+  descarta o reenvio. (2) O hash BCrypt do código novo é calculado **com o contador do e-mail
+  travado** (a linha é reivindicada com `SKIP LOCKED` e o convite novo precisa nascer na mesma
+  transação): com até 200 linhas por rodada, no pior caso um `redeem`/`resend` do último e-mail
+  da rodada espera cerca de 15 a 20 s; o teto é limitado (`MAX_ROWS`), não é negação de serviço
+  permanente, e é aceito no MVP (exceção consciente à prática de manter o BCrypt fora do lock do
+  contador, descrita no `InviteCodeAttemptsLocker` e nos serviços; reduzir `MAX_ROWS` é o ajuste se isso incomodar). (3) `InvitationService.resend` cancela
+  também os **outros** `ENVIADO` vigentes do mesmo grupo e e-mail (passo extra), para que a
+  corrida entre o job e o reenvio manual nunca deixe dois convites ativos. (4) Quando o teto de 3
+  é atingido, o job registra um log de aplicação de mensagem fixa e sem dado pessoal (R-04). (5)
+  O código de 6 dígitos é gerado por `InvitationCodeGenerator` (`SecureRandom`, `%06d`).
   *Esclarecimentos registrados na T-049 (retenção de `RECUSADO`/`EXPIRADO`, AC-014.1):*
   (1) o "recálculo" de `retention_deadline` por convite é **derivado na rotina**, não gravado nos
   fluxos de convite: nenhum job marca convite `VENCIDO` no banco (o estado é derivado do relógio,
