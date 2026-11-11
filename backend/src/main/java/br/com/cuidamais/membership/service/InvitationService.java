@@ -19,7 +19,6 @@ import br.com.cuidamais.membership.repository.InviteCodeAttemptsRepository;
 import br.com.cuidamais.membership.repository.MembershipRepository;
 import br.com.cuidamais.notification.event.InvitationEmail;
 import br.com.cuidamais.shared.exception.ResourceNotFoundException;
-import java.security.SecureRandom;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.util.List;
@@ -50,8 +49,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class InvitationService {
 
-    private static final int CODE_DIGITS = 6;
-    private static final int CODE_BOUND = 1_000_000;
     private static final int MAX_PAGE_SIZE = 100;
 
     private final InvitationRepository invitations;
@@ -64,9 +61,9 @@ public class InvitationService {
     private final ApplicationEventPublisher events;
     private final EntityManager entityManager;
     private final Clock clock;
-    private final SecureRandom random = new SecureRandom();
+    private final InvitationCodeGenerator codeGenerator;
 
-    /** Injeção por construtor de repositórios, acesso travado ao contador (R-03), encoder (D-04), publicador e relógio (D-10). */
+    /** Injeção por construtor de repositórios, acesso travado ao contador (R-03), gerador de código (D-04), encoder (D-04), publicador e relógio (D-10). */
     public InvitationService(
             InvitationRepository invitations,
             InviteCodeAttemptsRepository attemptsRepository,
@@ -74,6 +71,7 @@ public class InvitationService {
             MembershipRepository memberships,
             ElderRepository elders,
             UserRepository users,
+            InvitationCodeGenerator codeGenerator,
             PasswordEncoder encoder,
             ApplicationEventPublisher events,
             EntityManager entityManager,
@@ -84,6 +82,7 @@ public class InvitationService {
         this.memberships = memberships;
         this.elders = elders;
         this.users = users;
+        this.codeGenerator = codeGenerator;
         this.encoder = encoder;
         this.events = events;
         this.entityManager = entityManager;
@@ -117,7 +116,7 @@ public class InvitationService {
 
         // 4. e-mail com convite ENVIADO = reenvio: o anterior é cancelado (AC-003.12, D-31).
         List<Invitation> pending = invitations.findByGroupIdAndEmailAndStatus(groupId, email, InvitationStatus.ENVIADO);
-        String code = generateCode();
+        String code = codeGenerator.generate();
         String hash = encoder.encode(code);
         Invitation created;
         if (pending.isEmpty()) {
@@ -175,7 +174,7 @@ public class InvitationService {
     }
 
     /**
-     * Reenvia um convite {@code ENVIADO}, {@code VENCIDO} ou {@code CANCELADO}: cria um novo com
+     * Reenvia um convite {@code ENVIADO}, {@code VENCIDO} ou {@code CANCELADO}: cria um novo (e cancela os demais ENVIADO vigentes do mesmo grupo e e-mail) com
      * código e prazo novos e zera tentativas/bloqueio, sem zerar {@code autoResends} (AC-003.4,
      * AC-003.9, AC-003.3).
      *
@@ -201,9 +200,20 @@ public class InvitationService {
         }
 
         // 4. novo convite (o anterior ENVIADO vigente é cancelado pelo domínio).
-        String code = generateCode();
+        String code = codeGenerator.generate();
         Invitation created = Invitation.resend(
                 previous, encoder.encode(code), InvitationOrigin.MANUAL, callerUserId, clock);
+
+        // 4b. cancela TODOS os outros ENVIADO vigentes do mesmo grupo e e-mail (D-42): o contador já
+        //     está travado, então um convite criado por outra transação (ex.: o reenvio automático
+        //     que cancelou o 'previous' um instante antes) já está visível e não pode sobreviver.
+        for (Invitation other : invitations.findByGroupIdAndEmailAndStatus(
+                previous.getGroupId(), previous.getEmail(), InvitationStatus.ENVIADO)) {
+            if (!other.getId().equals(previous.getId()) && clock.instant().isBefore(other.getExpiresAt())) {
+                other.cancel(clock);
+                invitations.save(other);
+            }
+        }
 
         // 5. persiste o anterior (pode ter mudado), o novo, zera o contador e notifica.
         invitations.save(previous);
@@ -300,13 +310,12 @@ public class InvitationService {
         return groupId;
     }
 
-    /** Código numérico de 6 dígitos com zeros à esquerda, gerado por {@link SecureRandom} (D-04). */
-    private String generateCode() {
-        return String.format("%0" + CODE_DIGITS + "d", random.nextInt(CODE_BOUND));
-    }
-
-    /** Primeiro nome do idoso; o sobrenome nunca sai por e-mail (AC-003.1, P5). */
-    private static String firstName(String fullName) {
+    /**
+     * Primeiro nome do idoso; o sobrenome nunca sai por e-mail (AC-003.1, P5). Público para que a
+     * rotina de reenvio automático (T-048) monte o e-mail exatamente igual ao do convite normal,
+     * sem duplicar a regra de P5.
+     */
+    public static String firstName(String fullName) {
         String trimmed = fullName.strip();
         int space = trimmed.indexOf(' ');
         return space < 0 ? trimmed : trimmed.substring(0, space);

@@ -216,7 +216,7 @@ grupo deixa o banco vazio.
   banco com nome, telefone e endereço; o refresh token do removido está revogado. (AC-009.3 é
   provado aqui pela preservação do nome; a visibilidade nos registros fica para as features
   001–008.)
-- [ ] **T-048** Job de reenvio automático (D-09 item 4): ao fim do bloqueio, se há convite
+- [x] **T-048** Job de reenvio automático (D-09 item 4): ao fim do bloqueio, se há convite
   `ENVIADO` e `auto_resends < 3`, cancela e cria outro com `origin = AUTO` e envia o e-mail; não
   faz nada se um convite manual foi criado durante o bloqueio. AC: 003.3.
   Depende de: T-018, T-019, T-040. *Pronto quando:* testes cobrem o 1º reenvio automático (novo
