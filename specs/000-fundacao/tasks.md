@@ -240,7 +240,7 @@ OpenAPI do MockMvc não cobre).
 
 ## Fase 5 — Frontend (mobile-first)
 
-- [ ] **T-050** Core: interceptor que injeta o access token e renova via `/auth/refresh` no 401;
+- [x] **T-050** Core: interceptor que injeta o access token e renova via `/auth/refresh` no 401;
   token só em memória (D-12); guards por estado da conta lido de `/me/account` (D-20, D-33):
   `ATIVO` sem grupo fica **preso** no cadastro do idoso, só com "Sair"; `isAdmin` esconde
   convites, aprovação, filtros, edição do idoso e exclusão do grupo. ACs: 001.7, 015.1.
