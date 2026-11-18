@@ -246,7 +246,7 @@ OpenAPI do MockMvc não cobre).
   convites, aprovação, filtros, edição do idoso e exclusão do grupo. ACs: 001.7, 015.1.
   *Pronto quando:* testes de guard para cada estado e um teste de que os botões vedados não
   existem no DOM de um Cuidador.
-- [ ] **T-051** `[P]` `<app-endereco-form>` com ViaCEP (timeout **15 s**), máscara de CEP e o
+- [x] **T-051** `[P]` `<app-endereco-form>` com ViaCEP (timeout **15 s**), máscara de CEP e o
   aviso exato de AC-011.4 (D-27). ACs: 011.3, 011.4. *Pronto quando:* testes de componente com
   ViaCEP simulado para sucesso, `{"erro": true}` e timeout, conferindo o texto pelo catálogo.
 - [ ] **T-052** Criar grupo (com o aviso de 24 h) + verificar e-mail + reenviar código.

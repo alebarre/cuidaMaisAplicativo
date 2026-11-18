@@ -1,0 +1,97 @@
+<div class="endereco" data-testid="endereco-form" [attr.aria-busy]="ocupado()">
+  <div class="campo">
+    <label [for]="prefixo + '-cep'">CEP</label>
+    <input
+      [id]="prefixo + '-cep'"
+      data-testid="campo-cep"
+      type="text"
+      inputmode="numeric"
+      autocomplete="postal-code"
+      placeholder="00000-000"
+      [value]="cepExibido()"
+      [attr.aria-invalid]="invalido('zipCode') ? 'true' : null"
+      [attr.aria-describedby]="avisoCep() ? prefixo + '-aviso-cep' : null"
+      (input)="aoDigitarCep($event)"
+      (blur)="aoSairDoCep()"
+    />
+    @if (avisoCep(); as aviso) {
+      <p class="aviso" role="alert" [id]="prefixo + '-aviso-cep'">{{ aviso }}</p>
+    }
+  </div>
+
+  <div class="campo">
+    <label [for]="prefixo + '-logradouro'">Logradouro</label>
+    <input
+      [id]="prefixo + '-logradouro'"
+      data-testid="campo-logradouro"
+      type="text"
+      autocomplete="address-line1"
+      [formControl]="form.controls.street"
+      [attr.aria-invalid]="invalido('street') ? 'true' : null"
+    />
+  </div>
+
+  <div class="campo">
+    <label [for]="prefixo + '-numero'">Número</label>
+    <input
+      [id]="prefixo + '-numero'"
+      data-testid="campo-numero"
+      type="text"
+      autocomplete="off"
+      [formControl]="form.controls.number"
+      [attr.aria-invalid]="invalido('number') ? 'true' : null"
+    />
+  </div>
+
+  <div class="campo">
+    <label [for]="prefixo + '-complemento'">Complemento</label>
+    <input
+      [id]="prefixo + '-complemento'"
+      data-testid="campo-complemento"
+      type="text"
+      autocomplete="address-line2"
+      [formControl]="form.controls.complement"
+      [attr.aria-invalid]="invalido('complement') ? 'true' : null"
+    />
+  </div>
+
+  <div class="campo">
+    <label [for]="prefixo + '-bairro'">Bairro</label>
+    <input
+      [id]="prefixo + '-bairro'"
+      data-testid="campo-bairro"
+      type="text"
+      autocomplete="address-level3"
+      [formControl]="form.controls.district"
+      [attr.aria-invalid]="invalido('district') ? 'true' : null"
+    />
+  </div>
+
+  <div class="campo">
+    <label [for]="prefixo + '-cidade'">Cidade</label>
+    <input
+      [id]="prefixo + '-cidade'"
+      data-testid="campo-cidade"
+      type="text"
+      autocomplete="address-level2"
+      [formControl]="form.controls.city"
+      [attr.aria-invalid]="invalido('city') ? 'true' : null"
+    />
+  </div>
+
+  <div class="campo">
+    <label [for]="prefixo + '-uf'">UF</label>
+    <select
+      [id]="prefixo + '-uf'"
+      data-testid="campo-uf"
+      autocomplete="address-level1"
+      [formControl]="form.controls.state"
+      [attr.aria-invalid]="invalido('state') ? 'true' : null"
+    >
+      <option value=""></option>
+      @for (uf of ufs; track uf) {
+        <option [value]="uf">{{ uf }}</option>
+      }
+    </select>
+  </div>
+</div>
