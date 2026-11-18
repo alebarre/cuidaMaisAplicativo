@@ -274,7 +274,7 @@ OpenAPI do MockMvc não cobre).
   de status só para o Responsável), alterar papel, remover.
   ACs: 006.9, 009.1, 009.2, 009.5, 011.5, 011.8.
 - [ ] **T-060** `[P]` Meus dados (telefone e endereço). AC: 011.6.
-- [ ] **T-061** `[P]` Catálogo de mensagens pt-BR (D-40): uma chave por texto exato da spec,
+- [x] **T-061** `[P]` Catálogo de mensagens pt-BR (D-40): uma chave por texto exato da spec,
   nomeada pelo AC, e a tabela `code` → chave. ACs: 001.1, 003.5, 003.7, 004.4, 004.5, 004.7,
   006.8, 008.2, 011.4, 012.2, 013.1, 015.2. *Pronto quando:* um teste percorre a lista de textos
   exatos da spec e falha se algum não estiver no catálogo, caractere por caractere.
