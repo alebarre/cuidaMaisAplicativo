@@ -1,0 +1,139 @@
+// Mobile-first (360px): uma coluna, rótulo acima do campo, fonte >= 16px e alvos >= 44px (P4).
+// Cores com contraste WCAG AA sobre fundo branco, as mesmas do formulário de endereço.
+:host {
+  display: block;
+}
+
+.tela {
+  box-sizing: border-box;
+  max-width: 32rem;
+  margin: 0 auto;
+  padding: 1rem;
+  color: #1a1a1a;
+  background: #ffffff;
+}
+
+h1 {
+  margin: 0 0 1rem;
+  font-size: 1.5rem;
+  line-height: 1.25;
+}
+
+.formulario {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+label {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  font-size: 1rem;
+  color: #1a1a1a;
+  background: #ffffff;
+  border: 1px solid #595959;
+  border-radius: 0.5rem;
+
+  &:focus-visible {
+    outline: 3px solid #0b57d0;
+    outline-offset: 2px;
+  }
+
+  // Campo tocado e inválido: borda mais grossa e vermelha, sem depender só da cor (borda 2px).
+  &[aria-invalid='true'] {
+    border: 2px solid #b00020;
+  }
+}
+
+// Mensagem de validação abaixo do campo: vermelho escuro sobre branco (contraste > 7:1).
+.erro {
+  margin: 0;
+  font-size: 1rem;
+  color: #8c0019;
+}
+
+// Senha: campo e botão "Mostrar senha" lado a lado; rótulo e mensagem ocupam a linha toda.
+.campo-senha {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 0.5rem;
+  align-items: center;
+
+  label,
+  .erro {
+    grid-column: 1 / -1;
+  }
+}
+
+.mostrar-senha {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  font-size: 1rem;
+  color: #0b57d0;
+  background: #ffffff;
+  border: 1px solid #0b57d0;
+  border-radius: 0.5rem;
+  cursor: pointer;
+
+  // Senha visível: botão "apertado" em azul cheio, sem depender só da cor (texto e borda fixos).
+  &[aria-pressed='true'] {
+    color: #ffffff;
+    background: #0b57d0;
+  }
+
+  &:focus-visible {
+    outline: 3px solid #0b57d0;
+    outline-offset: 2px;
+  }
+}
+
+// Falha do envio: fundo claro e texto escuro (contraste > 7:1), como o aviso do endereço.
+.falha {
+  margin: 0;
+  padding: 0.75rem;
+  font-size: 1rem;
+  color: #5c3b00;
+  background: #fff4e5;
+  border: 1px solid #8a5300;
+  border-radius: 0.5rem;
+}
+
+.enviar {
+  width: 100%;
+  min-height: 48px;
+  padding: 0.75rem 1rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: #0b57d0;
+  border: 0;
+  border-radius: 0.5rem;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 3px solid #1a1a1a;
+    outline-offset: 2px;
+  }
+
+  // Enquanto envia: fica cinza escuro e sem clique, o texto continua legível.
+  &:disabled {
+    color: #ffffff;
+    background: #595959;
+    cursor: progress;
+  }
+}

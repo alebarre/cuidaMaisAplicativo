@@ -23,6 +23,14 @@ import { MENSAGENS, ChaveMensagem } from './mensagens';
  * Além dos textos da spec existe UMA chave extra, `FALLBACK_ERRO_GENERICO` (texto genérico para
  * código de erro desconhecido, NÃO vem da spec).
  *
+ * T-052 (textos APROVADOS pelo dono da spec, fora do `spec.md`): o catálogo ganhou 12 chaves
+ * (mensagens de validação dos formulários, `VAL_*`, e as de senha/código de AC-001.3 e AC-005.x).
+ * Elas NÃO entram na varredura da spec (não estão lá): têm a tabela própria
+ * `TEXTOS_APROVADOS_FORA_DA_SPEC`, com o texto literal exato, e o catálogo precisa ser EXATAMENTE
+ * (chaves da spec ∪ essas 12 ∪ `FALLBACK_ERRO_GENERICO`), com cada texto aprovado igual
+ * caractere por caractere. A varredura da spec continua exatamente como era.
+ * Marcadores: além dos de AC-004.7, `{restantes}` também em `AC_005_2_CODIGO_INCORRETO`.
+ *
  * Leitura do arquivo: o Vitest roda em Node; `@types/node` não está em `tsconfig.spec.json`
  * (`types: ["vitest/globals"]`), por isso a diretiva `/// <reference types="node" />` no topo
  * deste arquivo, sem alterar nenhuma configuração do projeto.
@@ -153,8 +161,8 @@ const ACS_E_CONTAGEM: ReadonlyArray<readonly [string, number]> = [
   ['015.2', 1],
 ];
 
-/** Todas as chaves esperadas do catálogo (convenção `AC_<nnn>_<m>_<SUFIXO>` + o fallback). */
-const CHAVES_ESPERADAS = [
+/** As 19 chaves dos textos exatos da spec (convenção `AC_<nnn>_<m>_<SUFIXO>`). */
+const CHAVES_DA_SPEC = [
   'AC_001_1_AVISO_CONFIRMACAO',
   'AC_001_1_ROTULO_CRIAR_GRUPO',
   'AC_003_5_JA_NO_GRUPO',
@@ -174,8 +182,45 @@ const CHAVES_ESPERADAS = [
   'AC_013_1_AVISO_EXCLUSAO',
   'AC_013_1_BOTAO_EXCLUIR',
   'AC_015_2_SEM_PERMISSAO',
-  'FALLBACK_ERRO_GENERICO',
-].sort();
+];
+
+/**
+ * T-052: textos aprovados pelo dono da spec que NÃO estão no `spec.md` (mensagens de validação dos
+ * formulários e de senha/código). Chave -> texto LITERAL exato, digitado à parte de qualquer
+ * extrator: o catálogo precisa ter cada um caractere por caractere.
+ */
+const TEXTOS_APROVADOS_FORA_DA_SPEC: Readonly<Record<string, string>> = {
+  VAL_OBRIGATORIO: 'Preencha este campo.',
+  VAL_NOME_CURTO: 'O nome precisa ter pelo menos 2 letras.',
+  VAL_EMAIL_INVALIDO: 'Informe um e-mail válido.',
+  VAL_TELEFONE_INVALIDO: 'Informe o telefone com DDD, só números (10 ou 11 dígitos).',
+  AC_001_3_SENHA_REGRA:
+    'A senha deve ter no mínimo 8 caracteres, com pelo menos uma letra e um número.',
+  VAL_CEP_INVALIDO: 'Informe o CEP com 8 números.',
+  VAL_NUMERO_INVALIDO: 'Informe o número (ex.: 120 ou 12B) ou S/N.',
+  VAL_UF_OBRIGATORIA: 'Escolha o estado.',
+  AC_005_2_CODIGO_INCORRETO: 'Código incorreto. Tentativas restantes: {restantes}.',
+  AC_005_1_CODIGO_EXPIRADO: 'Este código expirou ou foi bloqueado. Peça um novo código.',
+  AC_001_6_CODIGO_REENVIADO: 'Se o e-mail estiver cadastrado, enviaremos um novo código.',
+  AC_005_3_AGUARDE_REENVIO: 'Aguarde um minuto para pedir outro código.',
+};
+
+/** Chaves aprovadas fora da spec (as 12 da tabela acima). */
+const CHAVES_APROVADAS = Object.keys(TEXTOS_APROVADOS_FORA_DA_SPEC);
+
+/** Todas as chaves esperadas do catálogo: spec ∪ aprovadas fora da spec ∪ o fallback. */
+const CHAVES_ESPERADAS = [...CHAVES_DA_SPEC, ...CHAVES_APROVADAS, 'FALLBACK_ERRO_GENERICO'].sort();
+
+/**
+ * Compara os textos aprovados com um catálogo: devolve as chaves cujo texto está ausente ou
+ * difere (comparação estrita `===`, sem normalizar). Lista vazia = catálogo fiel aos aprovados.
+ */
+function divergenciasDosAprovados(
+  aprovados: Readonly<Record<string, string>>,
+  catalogoAvaliado: Readonly<Record<string, string>>,
+): string[] {
+  return Object.keys(aprovados).filter((chave) => catalogoAvaliado[chave] !== aprovados[chave]);
+}
 
 /**
  * Valores LITERAIS copiados da spec (um por texto), digitados à parte do extrator. Se o extrator
@@ -280,15 +325,15 @@ describe('Catálogo de mensagens pt-BR (T-061, D-40)', () => {
       },
     );
 
-    // Fecha a conta: 19 textos no total = 19 chaves da spec (+ o fallback), nenhuma sobrando.
-    it('D-40 o total de textos extraídos da spec bate com o das chaves do catálogo (menos o fallback)', () => {
+    // Fecha a conta: 19 textos no total = 19 chaves da spec (+ as 12 aprovadas + o fallback), nenhuma sobrando.
+    it('D-40 o total de textos extraídos da spec bate com o das chaves do catálogo (menos o fallback e as 12 aprovadas fora da spec)', () => {
       const todos = ACS_E_CONTAGEM.flatMap(([ac]) => textosDoAc(spec, ac));
       expect(todos).toHaveLength(19);
 
       // Cada texto da spec corresponde a UMA chave e vice-versa (fora o fallback).
       const valoresDaSpec = todos.map((t) => t.texto).sort();
       const valoresDoCatalogo = Object.entries(catalogo)
-        .filter(([chave]) => chave !== 'FALLBACK_ERRO_GENERICO')
+        .filter(([chave]) => chave !== 'FALLBACK_ERRO_GENERICO' && !CHAVES_APROVADAS.includes(chave))
         .map(([, valor]) => valor)
         .sort();
       expect(valoresDoCatalogo).toEqual(valoresDaSpec);
@@ -387,19 +432,84 @@ describe('Catálogo de mensagens pt-BR (T-061, D-40)', () => {
     });
   });
 
-  describe('forma do catálogo', () => {
-    // Conjunto exato de chaves: nenhuma faltando, nenhuma extra (convenção AC_<nnn>_<m>_<SUFIXO>).
-    it('D-40 o catálogo tem exatamente as chaves combinadas (19 textos da spec + o fallback)', () => {
-      expect(Object.keys(MENSAGENS).sort()).toEqual(CHAVES_ESPERADAS);
+  describe('textos aprovados fora da spec (T-052): um teste por texto, caractere por caractere', () => {
+    // Cada linha: chave aprovada e o texto literal exato da tabela (digitado à parte do catálogo).
+    it.each(Object.entries(TEXTOS_APROVADOS_FORA_DA_SPEC))(
+      'T-052 o texto da chave %s é exatamente o aprovado: %s',
+      (chave, texto) => {
+        // A chave existe (senão `toBe` compararia com undefined e a mensagem seria confusa).
+        expect(Object.keys(catalogo), `a chave ${chave} precisa existir no catálogo`).toContain(chave);
+        expect(catalogo[chave]).toBe(texto);
+      },
+    );
+
+    // Nenhuma divergência no conjunto todo (a mesma verificação, como lista, para o relatório de falha).
+    it('T-052 o catálogo não diverge em nenhum dos 12 textos aprovados', () => {
+      expect(divergenciasDosAprovados(TEXTOS_APROVADOS_FORA_DA_SPEC, catalogo)).toEqual([]);
     });
 
-    // Toda chave, exceto o fallback, segue o padrão nomeado pelo AC.
-    it('D-40 toda chave (exceto o fallback) segue o padrão AC_<nnn>_<m>_<SUFIXO> em maiúsculas', () => {
+    // Os 12 textos aprovados não repetem nenhum texto da spec (cada texto tem um dono só).
+    it('T-052 nenhum texto aprovado coincide com um texto da spec', () => {
+      const daSpec = ACS_E_CONTAGEM.flatMap(([ac]) => textosDoAc(spec, ac)).map((t) => t.texto);
+      for (const [chave, texto] of Object.entries(TEXTOS_APROVADOS_FORA_DA_SPEC)) {
+        expect(daSpec, chave).not.toContain(texto);
+      }
+    });
+
+    // Não-vacuidade do comparador: um catálogo fiel não acusa nada e cada mutação é acusada.
+    it('o comparador dos aprovados não acusa nada num catálogo fiel (linha de base)', () => {
+      expect(divergenciasDosAprovados(TEXTOS_APROVADOS_FORA_DA_SPEC, { ...TEXTOS_APROVADOS_FORA_DA_SPEC })).toEqual([]);
+    });
+
+    it('o comparador dos aprovados acusa ponto final removido, espaço extra, acento perdido e chave ausente (mutações)', () => {
+      const fiel = { ...TEXTOS_APROVADOS_FORA_DA_SPEC };
+
+      // Mutação 1: ponto final removido.
+      expect(divergenciasDosAprovados(fiel, { ...fiel, VAL_NOME_CURTO: 'O nome precisa ter pelo menos 2 letras' })).toEqual([
+        'VAL_NOME_CURTO',
+      ]);
+      // Mutação 2: espaço duplo no meio do texto.
+      expect(divergenciasDosAprovados(fiel, { ...fiel, VAL_OBRIGATORIO: 'Preencha  este campo.' })).toEqual([
+        'VAL_OBRIGATORIO',
+      ]);
+      // Mutação 3: acento perdido ("válido" -> "valido").
+      expect(divergenciasDosAprovados(fiel, { ...fiel, VAL_EMAIL_INVALIDO: 'Informe um e-mail valido.' })).toEqual([
+        'VAL_EMAIL_INVALIDO',
+      ]);
+      // Mutação 4: marcador renomeado ({restantes} -> {n}).
+      expect(
+        divergenciasDosAprovados(fiel, { ...fiel, AC_005_2_CODIGO_INCORRETO: 'Código incorreto. Tentativas restantes: {n}.' }),
+      ).toEqual(['AC_005_2_CODIGO_INCORRETO']);
+      // Mutação 5: chave removida do catálogo.
+      const semUf = Object.fromEntries(Object.entries(fiel).filter(([chave]) => chave !== 'VAL_UF_OBRIGATORIA'));
+      expect(divergenciasDosAprovados(fiel, semUf)).toEqual(['VAL_UF_OBRIGATORIA']);
+    });
+  });
+
+  describe('forma do catálogo', () => {
+    // Conjunto exato de chaves: nenhuma faltando, nenhuma extra.
+    it('D-40 o catálogo tem exatamente as chaves combinadas (19 da spec + 12 aprovadas fora da spec + o fallback)', () => {
+      expect(Object.keys(MENSAGENS).sort()).toEqual(CHAVES_ESPERADAS);
+      // 19 + 12 + 1: o conjunto esperado não pode ter chave repetida nem tabela vazia (não-vacuidade).
+      expect(CHAVES_DA_SPEC).toHaveLength(19);
+      expect(CHAVES_APROVADAS).toHaveLength(12);
+      expect(new Set(CHAVES_ESPERADAS).size).toBe(32);
+    });
+
+    // Toda chave, exceto o fallback, segue o padrão nomeado pelo AC; as 12 aprovadas fora da
+    // spec também podem ser `VAL_<SUFIXO>` (validação de formulário, sem AC próprio).
+    it('D-40 toda chave (exceto o fallback) segue o padrão AC_<nnn>_<m>_<SUFIXO> ou, nas aprovadas, VAL_<SUFIXO>', () => {
       for (const chave of Object.keys(MENSAGENS)) {
         if (chave === 'FALLBACK_ERRO_GENERICO') {
           continue;
         }
-        expect(chave).toMatch(/^AC_\d{3}_\d{1,2}_[A-Z][A-Z0-9_]*$/);
+        if (CHAVES_APROVADAS.includes(chave)) {
+          // Aprovadas fora da spec: nomeadas pelo AC de origem ou prefixadas por VAL_.
+          expect(chave).toMatch(/^(AC_\d{3}_\d{1,2}|VAL)_[A-Z][A-Z0-9_]*$/);
+        } else {
+          // Textos da spec: SEMPRE nomeados pelo AC, sem exceção.
+          expect(chave).toMatch(/^AC_\d{3}_\d{1,2}_[A-Z][A-Z0-9_]*$/);
+        }
       }
     });
 
@@ -418,19 +528,20 @@ describe('Catálogo de mensagens pt-BR (T-061, D-40)', () => {
       expect(new Set(valores).size).toBe(valores.length);
     });
 
-    // Marcadores `{...}`: só os dois de AC-004.7, cada um na chave certa.
-    it('AC-004.7 os únicos marcadores do catálogo são {restantes} e {tempo}, nas chaves de AC-004.7', () => {
+    // Marcadores `{...}`: exatamente três chaves os têm, cada uma com o seu (AC-004.7 e AC-005.2).
+    it('AC-004.7 e AC-005.2 os únicos marcadores do catálogo são {restantes} e {tempo}, nas três chaves esperadas', () => {
       const marcadoresPorChave = Object.entries(catalogo)
         .map(([chave, valor]) => [chave, [...valor.matchAll(/\{[^}]*\}/g)].map((m) => m[0])] as const)
-        .filter(([, marcadores]) => marcadores.length > 0);
+        .filter(([, marcadores]) => marcadores.length > 0)
+        .sort(([a], [b]) => a.localeCompare(b));
 
-      expect(marcadoresPorChave).toEqual(
-        expect.arrayContaining([
-          ['AC_004_7_INVALIDO', ['{restantes}']],
-          ['AC_004_7_BLOQUEADO', ['{tempo}']],
-        ]),
-      );
-      expect(marcadoresPorChave).toHaveLength(2);
+      expect(marcadoresPorChave).toEqual([
+        // AC-004.7: tentativas que restam no código de convite.
+        ['AC_004_7_BLOQUEADO', ['{tempo}']],
+        ['AC_004_7_INVALIDO', ['{restantes}']],
+        // AC-005.2: tentativas que restam no código de confirmação de e-mail.
+        ['AC_005_2_CODIGO_INCORRETO', ['{restantes}']],
+      ]);
     });
 
     // Chaves de AC-004.5 e AC-008.2: textos distintos por situação, mesmo no mesmo AC.

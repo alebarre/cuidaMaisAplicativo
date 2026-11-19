@@ -55,6 +55,32 @@ describe('MensagemService (D-40)', () => {
       );
     });
 
+    // T-052, AC-005.2: o texto aprovado do código de confirmação também usa {restantes} (0 a 4).
+    it('AC-005.2 substitui {restantes} em AC_005_2_CODIGO_INCORRETO (inclusive o 0)', () => {
+      // Passo 1: um valor comum.
+      expect(service.texto('AC_005_2_CODIGO_INCORRETO', { restantes: 3 })).toBe(
+        'Código incorreto. Tentativas restantes: 3.',
+      );
+      // Passo 2: zero não é "falta de parâmetro": o texto sai com 0.
+      expect(service.texto('AC_005_2_CODIGO_INCORRETO', { restantes: 0 })).toBe(
+        'Código incorreto. Tentativas restantes: 0.',
+      );
+    });
+
+    // T-052: faltar o parâmetro do marcador também lança aqui, para a tela nunca mostrar "{restantes}".
+    it('AC-005.2 lança Error citando {restantes} quando falta o parâmetro de AC_005_2_CODIGO_INCORRETO', () => {
+      expect(() => service.texto('AC_005_2_CODIGO_INCORRETO')).toThrow(/restantes/);
+    });
+
+    // T-052: textos aprovados sem marcador saem exatamente como estão no catálogo.
+    it('AC-005.1 e AC-001.6 os textos aprovados sem marcador saem exatamente como no catálogo', () => {
+      expect(service.texto('AC_005_1_CODIGO_EXPIRADO')).toBe('Este código expirou ou foi bloqueado. Peça um novo código.');
+      expect(service.texto('AC_001_6_CODIGO_REENVIADO')).toBe(
+        'Se o e-mail estiver cadastrado, enviaremos um novo código.',
+      );
+      expect(service.texto('AC_005_3_AGUARDE_REENVIO')).toBe('Aguarde um minuto para pedir outro código.');
+    });
+
     // Parâmetro que ninguém usa não atrapalha nem aparece no texto.
     it('ignora parâmetro extra que não tem marcador no texto', () => {
       expect(service.texto('AC_006_8_PEDIDO_EXPIRADO', { restantes: 9, tempo: '01:00' })).toBe(

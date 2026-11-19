@@ -10,6 +10,10 @@
  * Marcadores de valor variável (apenas em AC-004.7): `{restantes}` (tentativas que restam) e
  * `{tempo}` (contador MM:SS do bloqueio). Quem preenche é o `MensagemService.texto`.
  *
+ * Marcadores de valor variável (T-052): `{restantes}` também em `AC_005_2_CODIGO_INCORRETO`.
+ * As 12 chaves de validação e de código de confirmação (`VAL_*`, `AC_001_3_*`, `AC_005_*`,
+ * `AC_001_6_*`) NÃO vêm da spec: foram aprovadas pelo dono da spec na T-052 e têm teste próprio.
+ *
  * A chave `FALLBACK_ERRO_GENERICO` NÃO vem da spec: é o texto neutro usado quando o `code` do
  * erro é desconhecido ou inexistente (D-40). O catálogo é público, por isso nunca carrega dado
  * pessoal (P5).
@@ -58,6 +62,37 @@ export const MENSAGENS = {
   AC_013_1_BOTAO_EXCLUIR: 'Excluir definitivamente',
   /** AC-015.2: ação rejeitada por falta de permissão do papel. */
   AC_015_2_SEM_PERMISSAO: 'Você não tem permissão para esta ação.',
+  /**
+   * NÃO vem da spec (T-052, aprovado pelo dono da spec): validação de formulário, campo
+   * obrigatório vazio (nome, logradouro, bairro, cidade, código de 6 dígitos).
+   */
+  VAL_OBRIGATORIO: 'Preencha este campo.',
+  /** NÃO vem da spec (T-052, aprovado pelo dono): nome com menos de 2 letras. */
+  VAL_NOME_CURTO: 'O nome precisa ter pelo menos 2 letras.',
+  /** NÃO vem da spec (T-052, aprovado pelo dono): e-mail vazio, longo demais ou sem formato válido. */
+  VAL_EMAIL_INVALIDO: 'Informe um e-mail válido.',
+  /** NÃO vem da spec (T-052, aprovado pelo dono): telefone fora de DDD + 8 ou 9 dígitos. */
+  VAL_TELEFONE_INVALIDO: 'Informe o telefone com DDD, só números (10 ou 11 dígitos).',
+  /** NÃO vem da spec (T-052, aprovado pelo dono): senha fora da regra de AC-001.3. */
+  AC_001_3_SENHA_REGRA:
+    'A senha deve ter no mínimo 8 caracteres, com pelo menos uma letra e um número.',
+  /** NÃO vem da spec (T-052, aprovado pelo dono): CEP vazio ou sem 8 números (AC-011.2). */
+  VAL_CEP_INVALIDO: 'Informe o CEP com 8 números.',
+  /** NÃO vem da spec (T-052, aprovado pelo dono): número do imóvel vazio ou fora do formato (AC-011.1). */
+  VAL_NUMERO_INVALIDO: 'Informe o número (ex.: 120 ou 12B) ou S/N.',
+  /** NÃO vem da spec (T-052, aprovado pelo dono): UF não escolhida (AC-011.2). */
+  VAL_UF_OBRIGATORIA: 'Escolha o estado.',
+  /**
+   * NÃO vem da spec (T-052, aprovado pelo dono): código de confirmação errado (AC-005.2);
+   * `{restantes}` = tentativas que restam (0 a 4).
+   */
+  AC_005_2_CODIGO_INCORRETO: 'Código incorreto. Tentativas restantes: {restantes}.',
+  /** NÃO vem da spec (T-052, aprovado pelo dono): código expirado ou invalidado após 5 erros (AC-005.1). */
+  AC_005_1_CODIGO_EXPIRADO: 'Este código expirou ou foi bloqueado. Peça um novo código.',
+  /** NÃO vem da spec (T-052, aprovado pelo dono): resposta neutra do reenvio de código (AC-001.6, P5). */
+  AC_001_6_CODIGO_REENVIADO: 'Se o e-mail estiver cadastrado, enviaremos um novo código.',
+  /** NÃO vem da spec (T-052, aprovado pelo dono): reenvio antes de 1 minuto (AC-005.3). */
+  AC_005_3_AGUARDE_REENVIO: 'Aguarde um minuto para pedir outro código.',
   /** NÃO vem da spec (D-40): texto neutro para `code` desconhecido ou ausente. */
   FALLBACK_ERRO_GENERICO: 'Não foi possível concluir a ação. Tente novamente.',
 } as const;

@@ -55,3 +55,11 @@ select {
   border: 1px solid #8a5300;
   border-radius: 0.5rem;
 }
+
+// Mensagem de validação abaixo do campo (T-052): vermelho escuro sobre branco (contraste > 7:1),
+// sem depender só da cor (o campo também ganha borda de 2px e vem o texto explicando).
+.erro {
+  margin: 0;
+  font-size: 1rem;
+  color: #8c0019;
+}

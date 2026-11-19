@@ -1,0 +1,92 @@
+<main class="tela">
+  <h1>{{ mensagens.texto('AC_001_1_ROTULO_CRIAR_GRUPO') }}</h1>
+
+  <form [formGroup]="form" (ngSubmit)="aoEnviar()" novalidate class="formulario">
+    <div class="campo">
+      <label for="criar-grupo-nome">Nome completo</label>
+      <input
+        id="criar-grupo-nome"
+        type="text"
+        maxlength="120"
+        autocomplete="name"
+        formControlName="name"
+        [attr.aria-invalid]="invalido('name') ? 'true' : null"
+        [attr.aria-describedby]="mensagemDe('name') ? 'criar-grupo-nome-erro' : null"
+        (blur)="aoSair('name')"
+      />
+      @if (mensagemDe('name'); as erro) {
+        <p class="erro" id="criar-grupo-nome-erro">{{ erro }}</p>
+      }
+    </div>
+
+    <div class="campo">
+      <label for="criar-grupo-email">E-mail</label>
+      <input
+        id="criar-grupo-email"
+        type="email"
+        maxlength="254"
+        inputmode="email"
+        autocomplete="email"
+        formControlName="email"
+        [attr.aria-invalid]="invalido('email') ? 'true' : null"
+        [attr.aria-describedby]="mensagemDe('email') ? 'criar-grupo-email-erro' : null"
+        (blur)="aoSair('email')"
+      />
+      @if (mensagemDe('email'); as erro) {
+        <p class="erro" id="criar-grupo-email-erro">{{ erro }}</p>
+      }
+    </div>
+
+    <div class="campo">
+      <label for="criar-grupo-telefone">Telefone com DDD</label>
+      <input
+        id="criar-grupo-telefone"
+        type="tel"
+        inputmode="numeric"
+        autocomplete="tel"
+        formControlName="phone"
+        [attr.aria-invalid]="invalido('phone') ? 'true' : null"
+        [attr.aria-describedby]="mensagemDe('phone') ? 'criar-grupo-telefone-erro' : null"
+        (blur)="aoSair('phone')"
+      />
+      @if (mensagemDe('phone'); as erro) {
+        <p class="erro" id="criar-grupo-telefone-erro">{{ erro }}</p>
+      }
+    </div>
+
+    <app-endereco-form [form]="form.controls.address" />
+
+    <div class="campo campo-senha">
+      <label for="criar-grupo-senha">Senha</label>
+      <input
+        id="criar-grupo-senha"
+        [type]="senhaVisivel() ? 'text' : 'password'"
+        maxlength="128"
+        autocomplete="new-password"
+        formControlName="password"
+        [attr.aria-invalid]="invalido('password') ? 'true' : null"
+        [attr.aria-describedby]="mensagemDe('password') ? 'criar-grupo-senha-erro' : null"
+        (blur)="aoSair('password')"
+      />
+      <button
+        type="button"
+        class="mostrar-senha"
+        [attr.aria-pressed]="senhaVisivel() ? 'true' : 'false'"
+        (click)="alternarSenha()"
+      >
+        Mostrar senha
+      </button>
+      @if (mensagemDe('password'); as erro) {
+        <p class="erro" id="criar-grupo-senha-erro">{{ erro }}</p>
+      }
+    </div>
+
+    @if (falhou()) {
+      <p class="falha" role="alert">{{ mensagens.texto('FALLBACK_ERRO_GENERICO') }}</p>
+    }
+
+    <button type="submit" class="enviar" [disabled]="enviando()" [attr.aria-busy]="enviando() ? 'true' : null">
+      {{ mensagens.texto('AC_001_1_ROTULO_CRIAR_GRUPO') }}
+    </button>
+  </form>
+</main>

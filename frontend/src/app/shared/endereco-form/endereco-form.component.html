@@ -10,10 +10,13 @@
       placeholder="00000-000"
       [value]="cepExibido()"
       [attr.aria-invalid]="invalido('zipCode') ? 'true' : null"
-      [attr.aria-describedby]="avisoCep() ? prefixo + '-aviso-cep' : null"
+      [attr.aria-describedby]="descritoresDe('zipCode', 'cep')"
       (input)="aoDigitarCep($event)"
       (blur)="aoSairDoCep()"
     />
+    @if (mensagemDe('zipCode'); as erro) {
+      <p class="erro" [id]="prefixo + '-cep-erro'">{{ erro }}</p>
+    }
     @if (avisoCep(); as aviso) {
       <p class="aviso" role="alert" [id]="prefixo + '-aviso-cep'">{{ aviso }}</p>
     }
@@ -25,10 +28,15 @@
       [id]="prefixo + '-logradouro'"
       data-testid="campo-logradouro"
       type="text"
+      maxlength="150"
       autocomplete="address-line1"
       [formControl]="form.controls.street"
       [attr.aria-invalid]="invalido('street') ? 'true' : null"
+      [attr.aria-describedby]="descritoresDe('street', 'logradouro')"
     />
+    @if (mensagemDe('street'); as erro) {
+      <p class="erro" [id]="prefixo + '-logradouro-erro'">{{ erro }}</p>
+    }
   </div>
 
   <div class="campo">
@@ -40,7 +48,11 @@
       autocomplete="off"
       [formControl]="form.controls.number"
       [attr.aria-invalid]="invalido('number') ? 'true' : null"
+      [attr.aria-describedby]="descritoresDe('number', 'numero')"
     />
+    @if (mensagemDe('number'); as erro) {
+      <p class="erro" [id]="prefixo + '-numero-erro'">{{ erro }}</p>
+    }
   </div>
 
   <div class="campo">
@@ -49,6 +61,7 @@
       [id]="prefixo + '-complemento'"
       data-testid="campo-complemento"
       type="text"
+      maxlength="80"
       autocomplete="address-line2"
       [formControl]="form.controls.complement"
       [attr.aria-invalid]="invalido('complement') ? 'true' : null"
@@ -61,10 +74,15 @@
       [id]="prefixo + '-bairro'"
       data-testid="campo-bairro"
       type="text"
+      maxlength="80"
       autocomplete="address-level3"
       [formControl]="form.controls.district"
       [attr.aria-invalid]="invalido('district') ? 'true' : null"
+      [attr.aria-describedby]="descritoresDe('district', 'bairro')"
     />
+    @if (mensagemDe('district'); as erro) {
+      <p class="erro" [id]="prefixo + '-bairro-erro'">{{ erro }}</p>
+    }
   </div>
 
   <div class="campo">
@@ -73,10 +91,15 @@
       [id]="prefixo + '-cidade'"
       data-testid="campo-cidade"
       type="text"
+      maxlength="80"
       autocomplete="address-level2"
       [formControl]="form.controls.city"
       [attr.aria-invalid]="invalido('city') ? 'true' : null"
+      [attr.aria-describedby]="descritoresDe('city', 'cidade')"
     />
+    @if (mensagemDe('city'); as erro) {
+      <p class="erro" [id]="prefixo + '-cidade-erro'">{{ erro }}</p>
+    }
   </div>
 
   <div class="campo">
@@ -87,11 +110,15 @@
       autocomplete="address-level1"
       [formControl]="form.controls.state"
       [attr.aria-invalid]="invalido('state') ? 'true' : null"
+      [attr.aria-describedby]="descritoresDe('state', 'uf')"
     >
       <option value=""></option>
       @for (uf of ufs; track uf) {
         <option [value]="uf">{{ uf }}</option>
       }
     </select>
+    @if (mensagemDe('state'); as erro) {
+      <p class="erro" [id]="prefixo + '-uf-erro'">{{ erro }}</p>
+    }
   </div>
 </div>

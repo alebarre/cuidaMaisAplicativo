@@ -58,9 +58,19 @@ class DoisEnderecosAnfitriaoComponent {
  *  - P4: rótulos ligados aos campos (`label for`), `inputmode`, `autocomplete`, ids únicos;
  *  - P5/D-27: nada de storage nem de chamada ao backend.
  *
+ * T-052 (textos de validação APROVADOS pelo dono da spec): abaixo de cada campo TOCADO e inválido
+ * o componente mostra a mensagem do catálogo (`VAL_CEP_INVALIDO`, `VAL_NUMERO_INVALIDO`,
+ * `VAL_UF_OBRIGATORIA`, `VAL_OBRIGATORIO`), lida pelo `MensagemService` (D-40), ligada ao campo por
+ * `aria-describedby` e SEM `role="alert"` (o único `role="alert"` do componente continua sendo o
+ * aviso do CEP, AC-011.4). Complemento nunca mostra erro de obrigatório. A mensagem some quando o
+ * campo fica válido, só aparece depois de tocado (ou quando o pai chama `markAllAsTouched`) e os
+ * ids são únicos por instância.
+ *
  * Decisões registradas nos testes: consultar de novo ao redigitar o mesmo CEP depois de apagar um
- * dígito; não consultar o CEP já presente no valor inicial (edição de endereço salvo); textos de
- * erro de validação ficam fora (não estão na spec): só `aria-invalid`.
+ * dígito; não consultar o CEP já presente no valor inicial (edição de endereço salvo); CEP vazio
+ * e número vazio, depois de tocados, mostram `VAL_CEP_INVALIDO` e `VAL_NUMERO_INVALIDO` (os
+ * textos aprovados orientam também o campo vazio); campo acima do limite de tamanho fica com
+ * `aria-invalid` mas sem texto aprovado (não há mensagem de "texto longo demais" no catálogo).
  */
 describe('EnderecoFormComponent', () => {
   const CEP_RJ = '22041001';
@@ -981,6 +991,21 @@ describe('EnderecoFormComponent', () => {
       expect(campo(ID.cep).getAttribute('autocomplete')).toBe('postal-code');
     });
 
+    // Limites do contrato (`Address`) afirmados como ATRIBUTO no DOM, sem depender da validação.
+    it.each([
+      // Linha 1: logradouro, máximo de 150.
+      [ID.logradouro, 150],
+      // Linha 2: complemento, máximo de 80.
+      [ID.complemento, 80],
+      // Linha 3: bairro, máximo de 80.
+      [ID.bairro, 80],
+      // Linha 4: cidade, máximo de 80.
+      [ID.cidade, 80],
+    ])('AC-011.1 o campo %s tem o atributo maxlength=%i no DOM', (id, limite) => {
+      expect(campo(id).getAttribute('maxlength')).toBe(String(limite));
+      expect(campo(id).maxLength).toBe(limite);
+    });
+
     // O maxlength não pode truncar um CEP colado com pontuação ("22.041-001" tem 10 caracteres).
     it('P4 o maxlength do CEP comporta 00000-000 e uma colagem com pontuação (>= 10 ou ausente)', () => {
       const maximo = campo(ID.cep).maxLength;
@@ -1095,17 +1120,14 @@ describe('EnderecoFormComponent', () => {
       expect(campo(ID.numero).getAttribute('aria-invalid')).not.toBe('true');
     });
 
-    // Textos de erro de validação NÃO existem na spec/catálogo: tocar todos os campos não cria
-    // nenhum aviso (o único role=alert do componente é o do CEP, AC-011.4).
-    it('P4 tocar todos os campos vazios não cria nenhum role=alert nem mensagem de erro nova', () => {
-      const antes = textoDe(host);
-
+    // T-052: as mensagens de validação aprovadas NÃO são alertas: tocar todos os campos vazios
+    // mostra os textos do catálogo, mas o único role=alert possível continua sendo o do CEP (011.4).
+    it('P4 tocar todos os campos vazios não cria nenhum role=alert (as mensagens de validação não são alertas)', () => {
       for (const id of TODOS_OS_CAMPOS) {
         sairDe(id);
       }
 
       expect(avisos()).toHaveLength(0);
-      expect(textoDe(host)).toBe(antes);
     });
 
     // Dois formulários na mesma tela (idoso + contato): ids únicos e cada rótulo aponta para o seu campo.
@@ -1154,6 +1176,368 @@ describe('EnderecoFormComponent', () => {
       expect(avisos(segundo)).toHaveLength(0);
       expect(campo(ID.cep, segundo).value).toBe('');
       duplo.destroy();
+    });
+  });
+
+  // ---------------------------------------------------------------------------------------
+  // Mensagens de validação (T-052: textos aprovados; AC-011.1, AC-011.2, D-40, P4)
+  // ---------------------------------------------------------------------------------------
+
+  describe('mensagens de validação (T-052, AC-011.1, AC-011.2, D-40, P4)', () => {
+    beforeEach(() => montar());
+
+    /** Chaves do catálogo usadas pelo componente, com o texto literal aprovado (digitado à parte). */
+    const MSG = {
+      cep: { chave: 'VAL_CEP_INVALIDO', texto: 'Informe o CEP com 8 números.' },
+      numero: { chave: 'VAL_NUMERO_INVALIDO', texto: 'Informe o número (ex.: 120 ou 12B) ou S/N.' },
+      uf: { chave: 'VAL_UF_OBRIGATORIA', texto: 'Escolha o estado.' },
+      obrigatorio: { chave: 'VAL_OBRIGATORIO', texto: 'Preencha este campo.' },
+    } as const;
+
+    /** Elementos apontados por `aria-describedby` do campo (ids que existem no documento). */
+    function descritores(id: string, raiz: ParentNode = host): HTMLElement[] {
+      const ids = (campo(id, raiz).getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean);
+      return ids
+        .map((ref) => document.getElementById(ref))
+        .filter((el): el is HTMLElement => el !== null);
+    }
+
+    /** Elemento da mensagem de VALIDAÇÃO do campo (o descritor que não é o aviso `role=alert` do CEP). */
+    function elementoDaMensagem(id: string, raiz: ParentNode = host): HTMLElement | undefined {
+      return descritores(id, raiz).find((el) => el.getAttribute('role') !== 'alert');
+    }
+
+    /** Texto da mensagem de validação ligada ao campo ('' quando não há). */
+    const mensagemDe = (id: string, raiz: ParentNode = host) => textoDe(elementoDaMensagem(id, raiz));
+
+    /** Os seis campos obrigatórios com a mensagem esperada quando vazios (decisões na descrição). */
+    const OBRIGATORIOS_VAZIOS: [string, string][] = [
+      [ID.cep, MSG.cep.texto],
+      [ID.logradouro, MSG.obrigatorio.texto],
+      [ID.numero, MSG.numero.texto],
+      [ID.bairro, MSG.obrigatorio.texto],
+      [ID.cidade, MSG.obrigatorio.texto],
+      [ID.uf, MSG.uf.texto],
+    ];
+
+    // Ao abrir, a tela não "grita": nenhuma das quatro mensagens existe, nem ligação por describedby.
+    it('P4 ao abrir, com o formulário vazio e inválido, nenhum campo mostra mensagem de validação', () => {
+      expect(endereco.valid).toBe(false);
+
+      for (const id of TODOS_OS_CAMPOS) {
+        expect(mensagemDe(id), id).toBe('');
+      }
+      for (const { texto } of Object.values(MSG)) {
+        expect(textoDe(host)).not.toContain(texto);
+      }
+    });
+
+    // Cada linha: um campo, o valor digitado e a mensagem do catálogo esperada depois de tocar.
+    it.each([
+      // Linha 1: CEP incompleto (5 dígitos) -> VAL_CEP_INVALIDO (AC-011.2).
+      [ID.cep, '22041', MSG.cep.chave],
+      // Linha 2: CEP vazio e tocado -> o mesmo texto (decisão: o texto aprovado orienta o vazio também).
+      [ID.cep, '', MSG.cep.chave],
+      // Linha 3: número com duas letras -> VAL_NUMERO_INVALIDO (AC-011.1).
+      [ID.numero, '12AB', MSG.numero.chave],
+      // Linha 4: número com 7 dígitos -> VAL_NUMERO_INVALIDO.
+      [ID.numero, '1234567', MSG.numero.chave],
+      // Linha 5: número vazio e tocado -> VAL_NUMERO_INVALIDO (decisão, igual ao CEP).
+      [ID.numero, '', MSG.numero.chave],
+      // Linha 6: logradouro vazio -> VAL_OBRIGATORIO.
+      [ID.logradouro, '', MSG.obrigatorio.chave],
+      // Linha 7: logradouro só com espaços conta como vazio -> VAL_OBRIGATORIO (AC-011.1).
+      [ID.logradouro, '    ', MSG.obrigatorio.chave],
+      // Linha 8: bairro vazio -> VAL_OBRIGATORIO.
+      [ID.bairro, '', MSG.obrigatorio.chave],
+      // Linha 9: bairro só com espaços -> VAL_OBRIGATORIO.
+      [ID.bairro, '   ', MSG.obrigatorio.chave],
+      // Linha 10: cidade vazia -> VAL_OBRIGATORIO.
+      [ID.cidade, '', MSG.obrigatorio.chave],
+      // Linha 11: cidade só com espaços -> VAL_OBRIGATORIO.
+      [ID.cidade, '  ', MSG.obrigatorio.chave],
+    ])('AC-011.1 %s com %j, depois de tocado, mostra a mensagem do catálogo %s', (id, valor, chave) => {
+      if (valor !== '') {
+        digitar(id, valor);
+      }
+      sairDe(id);
+
+      // O texto vem do catálogo (pela chave) e é exatamente o aprovado (literal).
+      const aprovado = Object.values(MSG).find((m) => m.chave === chave);
+      expect(aprovado, `a chave ${chave} precisa estar na tabela MSG`).toBeDefined();
+      expect(mensagemDe(id)).toBe(MENSAGENS[chave as keyof typeof MENSAGENS]);
+      expect(mensagemDe(id)).toBe(aprovado?.texto);
+      // E o campo continua marcado como inválido para leitores de tela.
+      expect(campo(id).getAttribute('aria-invalid')).toBe('true');
+    });
+
+    // UF não escolhida e tocada -> VAL_UF_OBRIGATORIA (AC-011.2).
+    it('AC-011.2 a UF não escolhida, depois de tocada, mostra "Escolha o estado." (VAL_UF_OBRIGATORIA)', () => {
+      sairDe(ID.uf);
+
+      expect(mensagemDe(ID.uf)).toBe(MENSAGENS.VAL_UF_OBRIGATORIA);
+      expect(mensagemDe(ID.uf)).toBe(MSG.uf.texto);
+      expect(campo(ID.uf).getAttribute('aria-invalid')).toBe('true');
+    });
+
+    // O complemento é opcional: nunca mostra erro de obrigatório, vazio ou só com espaços.
+    it.each([
+      // Linha 1: vazio.
+      [''],
+      // Linha 2: só espaços (conta como vazio).
+      ['    '],
+      // Linha 3: preenchido.
+      ['apto 101'],
+    ])('AC-011.1 o complemento %j, depois de tocado, nunca mostra mensagem de validação', (valor) => {
+      if (valor !== '') {
+        digitar(ID.complemento, valor);
+      }
+      sairDe(ID.complemento);
+
+      expect(mensagemDe(ID.complemento)).toBe('');
+      expect(descritores(ID.complemento)).toHaveLength(0);
+      for (const { texto } of Object.values(MSG)) {
+        expect(textoDe(campo<HTMLElement>('endereco-form'))).not.toContain(texto);
+      }
+    });
+
+    // A mensagem só aparece depois de a pessoa passar pelo campo (tocado), nunca durante a digitação.
+    it('P4 a mensagem só aparece depois de tocado: digitar um valor inválido sem sair do campo não mostra nada', () => {
+      // Passo 1: número inválido digitado, sem blur.
+      digitar(ID.numero, '12AB');
+      expect(mensagemDe(ID.numero)).toBe('');
+
+      // Passo 2: ao sair do campo a mensagem aparece.
+      sairDe(ID.numero);
+      expect(mensagemDe(ID.numero)).toBe(MSG.numero.texto);
+    });
+
+    // Cada linha: campo, valor inválido que gera a mensagem e valor que a faz sumir.
+    it.each([
+      // Linha 1: CEP incompleto -> 8 dígitos (a consulta ao ViaCEP é descartada, a mensagem some).
+      [ID.cep, '22041', CEP_RJ],
+      // Linha 2: número inválido -> número com letra.
+      [ID.numero, '12AB', '12B'],
+      // Linha 3: número vazio -> S/N.
+      [ID.numero, '', 'S/N'],
+      // Linha 4: logradouro vazio -> preenchido.
+      [ID.logradouro, '', 'Rua A'],
+      // Linha 5: bairro só espaços -> preenchido.
+      [ID.bairro, '   ', 'Centro'],
+      // Linha 6: cidade vazia -> preenchida.
+      [ID.cidade, '', 'Niterói'],
+    ])('P4 %s: a mensagem de %j some quando o valor passa a ser válido (%j)', (id, invalido, valido) => {
+      // Passo 1: mostra a mensagem.
+      if (invalido !== '') {
+        digitar(id, invalido);
+      }
+      sairDe(id);
+      expect(mensagemDe(id), 'a mensagem deveria aparecer antes da correção').not.toBe('');
+
+      // Passo 2: corrige; mensagem, describedby e aria-invalid saem.
+      digitar(id, valido);
+      http.match(() => true);
+      expect(mensagemDe(id)).toBe('');
+      expect(descritores(id)).toHaveLength(0);
+      expect(campo(id).getAttribute('aria-invalid')).not.toBe('true');
+    });
+
+    // UF: escolher uma sigla depois de tocada faz a mensagem sumir.
+    it('AC-011.2 a mensagem da UF some quando uma UF é escolhida', () => {
+      sairDe(ID.uf);
+      expect(mensagemDe(ID.uf)).toBe(MSG.uf.texto);
+
+      escolherUf('RJ');
+
+      expect(mensagemDe(ID.uf)).toBe('');
+      expect(campo(ID.uf).getAttribute('aria-invalid')).not.toBe('true');
+    });
+
+    // Cada campo com mensagem a liga por aria-describedby a um elemento que existe, único e sem role=alert.
+    it.each(OBRIGATORIOS_VAZIOS)('P4 %s: aria-describedby aponta para um elemento com a mensagem, sem role=alert', (id, texto) => {
+      sairDe(id);
+
+      // Passo 1: há exatamente um elemento de mensagem ligado ao campo e o texto é o aprovado.
+      const elemento = elementoDaMensagem(id);
+      expect(elemento, 'a mensagem precisa estar ligada por aria-describedby').toBeDefined();
+      expect(textoDe(elemento)).toBe(texto);
+      // Passo 2: não é alerta (nem está dentro de um) e o id é único no documento.
+      expect(elemento?.getAttribute('role')).not.toBe('alert');
+      expect(elemento?.closest('[role="alert"]')).toBeNull();
+      expect(document.querySelectorAll(`[id="${elemento?.id}"]`)).toHaveLength(1);
+      expect(elemento?.id).not.toBe('');
+    });
+
+    // "Abaixo do campo": a mensagem fica no mesmo bloco do campo e DEPOIS dele no documento.
+    it.each(OBRIGATORIOS_VAZIOS)('P4 %s: a mensagem aparece abaixo do campo (mesmo bloco, depois dele)', (id) => {
+      sairDe(id);
+
+      const entrada = campo(id);
+      const mensagem = elementoDaMensagem(id) as HTMLElement;
+      expect(entrada.parentElement?.contains(mensagem)).toBe(true);
+      expect(entrada.compareDocumentPosition(mensagem) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    // Tocar todos os campos mostra as seis mensagens (uma por campo obrigatório) e mais nada.
+    it('AC-011.1 tocar todos os campos vazios mostra uma mensagem por campo obrigatório e nenhuma no complemento', () => {
+      for (const id of TODOS_OS_CAMPOS) {
+        sairDe(id);
+      }
+
+      // Um campo = uma mensagem, com o texto esperado por campo (decisões: CEP e número vazios).
+      for (const [id, texto] of OBRIGATORIOS_VAZIOS) {
+        expect(mensagemDe(id), id).toBe(texto);
+      }
+      expect(mensagemDe(ID.complemento)).toBe('');
+      // Nenhum dos elementos de mensagem é alerta.
+      expect(avisos()).toHaveLength(0);
+    });
+
+    // O pai pode marcar o formulário todo como tocado no submit: as mensagens aparecem sem blur algum.
+    it('AC-011.1 o pai chamar markAllAsTouched (submit) mostra as mensagens de todos os campos inválidos', () => {
+      // Passo 1: nada tocado, nada de mensagem.
+      expect(mensagemDe(ID.cep)).toBe('');
+
+      // Passo 2: o pai marca tudo como tocado, como fará ao tentar enviar.
+      pai.markAllAsTouched();
+      atualizar();
+
+      for (const [id, texto] of OBRIGATORIOS_VAZIOS) {
+        expect(mensagemDe(id), id).toBe(texto);
+        expect(campo(id).getAttribute('aria-invalid'), id).toBe('true');
+      }
+      expect(mensagemDe(ID.complemento)).toBe('');
+      expect(avisos()).toHaveLength(0);
+    });
+
+    // markAllAsTouched com campos válidos: só os inválidos mostram mensagem.
+    it('AC-011.1 markAllAsTouched com o endereço todo válido não mostra nenhuma mensagem', () => {
+      endereco.setValue({
+        zipCode: '22041001',
+        street: 'Rua A',
+        number: '370',
+        complement: '',
+        district: 'Centro',
+        city: 'Niterói',
+        state: 'RJ',
+      });
+
+      pai.markAllAsTouched();
+      atualizar();
+
+      for (const id of TODOS_OS_CAMPOS) {
+        expect(mensagemDe(id), id).toBe('');
+        expect(campo(id).getAttribute('aria-invalid'), id).not.toBe('true');
+      }
+    });
+
+    // AC-011.3: a consulta do CEP preenche os campos e as mensagens deles somem, sem tocar no número.
+    it('AC-011.3 o preenchimento pelo ViaCEP faz sumir as mensagens de logradouro, bairro, cidade e UF', () => {
+      // Passo 1: pessoa passou pelos campos vazios e vê as mensagens.
+      for (const id of [ID.logradouro, ID.bairro, ID.cidade, ID.uf, ID.numero]) {
+        sairDe(id);
+      }
+      expect(mensagemDe(ID.logradouro)).toBe(MSG.obrigatorio.texto);
+
+      // Passo 2: digita o CEP e a consulta preenche os quatro campos.
+      consultarCep(CEP_RJ).flush(RESPOSTA_RJ);
+      atualizar();
+
+      // Passo 3: as quatro mensagens saem; o número (que o ViaCEP não preenche) continua com a dele.
+      for (const id of [ID.logradouro, ID.bairro, ID.cidade, ID.uf]) {
+        expect(mensagemDe(id), id).toBe('');
+      }
+      expect(mensagemDe(ID.numero)).toBe(MSG.numero.texto);
+    });
+
+    // Campo acima do limite de tamanho: continua aria-invalid (T-051); não há texto aprovado para isso.
+    it('P4 logradouro acima de 150 caracteres fica com aria-invalid e sem mensagem de "obrigatório"', () => {
+      digitar(ID.logradouro, 'x'.repeat(151));
+      sairDe(ID.logradouro);
+
+      expect(campo(ID.logradouro).getAttribute('aria-invalid')).toBe('true');
+      expect(mensagemDe(ID.logradouro)).not.toBe(MSG.obrigatorio.texto);
+    });
+
+    // AC-011.4 continua intacto: o aviso do CEP é o único role=alert e segue ligado por aria-describedby.
+    it('AC-011.4 com todas as mensagens visíveis, o único role=alert é o aviso do CEP, ligado ao campo por aria-describedby', () => {
+      // Passo 1: todas as mensagens de validação visíveis.
+      for (const id of TODOS_OS_CAMPOS) {
+        sairDe(id);
+      }
+      expect(avisos()).toHaveLength(0);
+
+      // Passo 2: a consulta do CEP falha e o aviso aparece.
+      falhar(consultarCep(CEP_RJ), (req) => req.flush({ erro: true }));
+
+      const alertas = avisos();
+      expect(alertas).toHaveLength(1);
+      expect(textoDe(alertas[0])).toBe(MENSAGENS.AC_011_4_CEP_FALHA);
+      // O aviso é um dos descritores do CEP.
+      expect(descritores(ID.cep).map((el) => el.id)).toContain(alertas[0].id);
+      expect(alertas[0].id).not.toBe('');
+    });
+
+    // Dois formulários na mesma tela: ids das mensagens únicos e cada campo aponta para a mensagem do seu formulário.
+    it('P4 dois formulários com todas as mensagens visíveis têm ids únicos e cada campo aponta para a sua própria mensagem', () => {
+      fixture.destroy();
+      const duplo = TestBed.createComponent(DoisEnderecosAnfitriaoComponent);
+      duplo.detectChanges();
+      const raiz = duplo.nativeElement as HTMLElement;
+      const primeiro = campo<HTMLElement>('primeiro', raiz);
+      const segundo = campo<HTMLElement>('segundo', raiz);
+
+      // Passo 1: toca todos os campos nos dois formulários.
+      for (const regiao of [primeiro, segundo]) {
+        for (const id of TODOS_OS_CAMPOS) {
+          campo(id, regiao).dispatchEvent(new Event('blur'));
+        }
+      }
+      duplo.detectChanges();
+
+      // Passo 2: nenhum id repetido no documento do anfitrião.
+      const ids = Array.from(raiz.querySelectorAll('[id]')).map((e) => e.id);
+      expect(new Set(ids).size).toBe(ids.length);
+
+      // Passo 3: em cada formulário, a mensagem ligada ao campo mora dentro do próprio formulário.
+      for (const regiao of [primeiro, segundo]) {
+        for (const [id, texto] of OBRIGATORIOS_VAZIOS) {
+          const mensagem = elementoDaMensagem(id, regiao);
+          expect(mensagem, id).toBeDefined();
+          expect(regiao.contains(mensagem as HTMLElement), id).toBe(true);
+          expect(textoDe(mensagem), id).toBe(texto);
+        }
+      }
+      duplo.destroy();
+    });
+
+    // D-40: o texto vem do MensagemService, não é digitado no componente (troca o serviço e a tela muda).
+    it('D-40 as mensagens de validação vêm de MensagemService.texto(chave), não são digitadas no componente', () => {
+      fixture.destroy();
+      const texto = vi
+        .spyOn(TestBed.inject(MensagemService), 'texto')
+        .mockImplementation((chave) => `«${chave}»`);
+      montar();
+
+      for (const id of TODOS_OS_CAMPOS) {
+        sairDe(id);
+      }
+
+      // Cada campo mostra exatamente a marca da chave certa: prova a chave e que não há texto fixo.
+      expect(mensagemDe(ID.cep)).toBe('«VAL_CEP_INVALIDO»');
+      expect(mensagemDe(ID.logradouro)).toBe('«VAL_OBRIGATORIO»');
+      expect(mensagemDe(ID.numero)).toBe('«VAL_NUMERO_INVALIDO»');
+      expect(mensagemDe(ID.bairro)).toBe('«VAL_OBRIGATORIO»');
+      expect(mensagemDe(ID.cidade)).toBe('«VAL_OBRIGATORIO»');
+      expect(mensagemDe(ID.uf)).toBe('«VAL_UF_OBRIGATORIA»');
+      expect(texto).toHaveBeenCalledWith('VAL_CEP_INVALIDO');
+    });
+
+    // Guarda: o catálogo tem mesmo os textos aprovados (para os literais acima não mascararem uma troca).
+    it('D-40 o catálogo guarda exatamente os quatro textos de validação do endereço', () => {
+      for (const { chave, texto } of Object.values(MSG)) {
+        expect(MENSAGENS[chave], chave).toBe(texto);
+      }
     });
   });
 

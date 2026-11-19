@@ -4,7 +4,7 @@
  * Centralizar aqui evita strings soltas espalhadas: o interceptor leva ao login quando a sessão
  * não pode ser renovada e os guards escolhem o destino conforme o estado da conta
  * (D-33). As telas em si são criadas por outras tarefas; esta tabela só fixa os caminhos
- * que elas devem ocupar.
+ * que elas devem ocupar. `CRIAR_GRUPO` (T-052) é a tela pública de cadastro do criador do grupo.
  */
 export const ROTAS = {
   LOGIN: '/entrar',
@@ -12,4 +12,5 @@ export const ROTAS = {
   CADASTRO_IDOSO: '/idoso/novo',
   AGUARDANDO_APROVACAO: '/aguardando-aprovacao',
   HOME: '/inicio',
+  CRIAR_GRUPO: '/criar-grupo',
 } as const;

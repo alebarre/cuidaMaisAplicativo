@@ -3,6 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ReactiveFormsModule } from '@angular/forms';
 import { EMPTY, Subject, catchError, map, merge, of, switchMap } from 'rxjs';
 import { MensagemService } from '../../core/messages/mensagem.service';
+import { ChaveMensagem } from '../../core/messages/mensagens';
 import { EnderecoForm, UFS } from './endereco-form';
 import { EnderecoViaCep, ViaCepService } from './via-cep.service';
 
@@ -34,9 +35,14 @@ let proximaInstancia = 0;
  * catálogo pelo `MensagemService`, sem bloquear nem apagar nada: o cadastro segue à mão.
  *
  * Acessibilidade (P4): cada campo tem `<label for>` com `id` único por instância, `aria-invalid`
- * só em campo tocado e inválido, `aria-busy` durante a consulta e o aviso em `role="alert"`.
- * Textos de erro de validação NÃO são exibidos (decisão do dono da spec pendente). Nada vai para
- * storage ou cookie (P5) e o backend não é chamado.
+ * só em campo tocado e inválido, `aria-busy` durante a consulta e o aviso do CEP em `role="alert"`.
+ * T-052: abaixo de cada campo tocado e inválido aparece a mensagem de validação do catálogo
+ * (`VAL_CEP_INVALIDO`, `VAL_NUMERO_INVALIDO`, `VAL_UF_OBRIGATORIA`, `VAL_OBRIGATORIO`, D-40),
+ * ligada ao campo por `aria-describedby` e SEM `role="alert"` (só o aviso do CEP, AC-011.4, é
+ * alerta). O complemento nunca mostra mensagem de obrigatório; excesso de tamanho mantém só o
+ * `aria-invalid`, pois não há texto aprovado para isso. Quando o pai chama `markAllAsTouched`
+ * (envio), todas as mensagens pendentes aparecem de uma vez. Nada vai para storage ou cookie (P5)
+ * e o backend não é chamado.
  */
 @Component({
   selector: 'app-endereco-form',
@@ -244,5 +250,64 @@ export class EnderecoFormComponent implements OnInit {
     this.versao();
     const controle = this.form.controls[campo];
     return controle.touched && controle.invalid;
+  }
+
+  /**
+   * Devolve a mensagem de validação (texto do catálogo, D-40) do campo, ou `null` quando não há
+   * o que mostrar. Só aparece se o campo está tocado e inválido (`invalido`); o texto depende do
+   * campo e do erro: CEP e número usam a orientação própria (inclusive quando vazios), UF pede
+   * para escolher o estado, e logradouro/bairro/cidade vazios pedem para preencher. Excesso de
+   * tamanho e o complemento não têm texto aprovado e ficam sem mensagem.
+   */
+  protected mensagemDe(campo: keyof EnderecoForm['controls']): string | null {
+    // 1. Sem campo tocado e inválido não há nada a mostrar (a tela não "grita" ao abrir).
+    if (!this.invalido(campo)) {
+      return null;
+    }
+
+    // 2. Escolhe a chave do catálogo conforme o campo e o tipo de erro.
+    const erros = this.form.controls[campo].errors ?? {};
+    let chave: ChaveMensagem | null = null;
+    switch (campo) {
+      case 'zipCode':
+        chave = 'VAL_CEP_INVALIDO';
+        break;
+      case 'number':
+        chave = 'VAL_NUMERO_INVALIDO';
+        break;
+      case 'state':
+        chave = 'VAL_UF_OBRIGATORIA';
+        break;
+      case 'street':
+      case 'district':
+      case 'city':
+        // Só o "vazio" tem texto aprovado; "longo demais" fica apenas com aria-invalid.
+        chave = erros['required'] ? 'VAL_OBRIGATORIO' : null;
+        break;
+      default:
+        // `complement` é opcional: nunca mostra mensagem.
+        chave = null;
+    }
+
+    // 3. O texto sempre vem do catálogo, pelo serviço (nada digitado aqui).
+    return chave === null ? null : this.mensagens.texto(chave);
+  }
+
+  /**
+   * Monta o valor do `aria-describedby` do campo: o id da mensagem de validação (quando visível)
+   * e, no CEP, também o id do aviso de falha da consulta (AC-011.4). Devolve `null` quando não há
+   * nenhum descritor, para o atributo nem existir.
+   */
+  protected descritoresDe(campo: keyof EnderecoForm['controls'], sufixo: string): string | null {
+    const ids: string[] = [];
+    // 1. A mensagem de validação, quando existe, é o primeiro descritor.
+    if (this.mensagemDe(campo) !== null) {
+      ids.push(`${this.prefixo}-${sufixo}-erro`);
+    }
+    // 2. O aviso da consulta de CEP só pertence ao campo do CEP.
+    if (campo === 'zipCode' && this.avisoCep()) {
+      ids.push(`${this.prefixo}-aviso-cep`);
+    }
+    return ids.length > 0 ? ids.join(' ') : null;
   }
 }

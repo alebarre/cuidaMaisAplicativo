@@ -249,7 +249,7 @@ OpenAPI do MockMvc não cobre).
 - [x] **T-051** `[P]` `<app-endereco-form>` com ViaCEP (timeout **15 s**), máscara de CEP e o
   aviso exato de AC-011.4 (D-27). ACs: 011.3, 011.4. *Pronto quando:* testes de componente com
   ViaCEP simulado para sucesso, `{"erro": true}` e timeout, conferindo o texto pelo catálogo.
-- [ ] **T-052** Criar grupo (com o aviso de 24 h) + verificar e-mail + reenviar código.
+- [x] **T-052** Criar grupo (com o aviso de 24 h) + verificar e-mail + reenviar código.
   ACs: 001.1, 001.2, 001.3, 001.6, 005.1, 005.2, 005.3.
 - [ ] **T-053** Login com a mensagem de cada estado (`AGUARDANDO_CONFIRMACAO_EMAIL` leva à tela
   de confirmação), sem nenhuma indicação de bloqueio, e ação "Sair" visível em toda a área

@@ -1,0 +1,78 @@
+<main class="tela">
+  <h1>Confirme seu e-mail</h1>
+
+  @if (fluxo.avisoPendente()) {
+    <p class="aviso">{{ mensagens.texto('AC_001_1_AVISO_CONFIRMACAO') }}</p>
+  }
+
+  <form (submit)="$event.preventDefault(); aoConfirmar()" novalidate class="formulario">
+    <div class="campo">
+      <label for="confirmar-email-email">E-mail</label>
+      <input
+        #campoEmail
+        id="confirmar-email-email"
+        type="email"
+        maxlength="254"
+        inputmode="email"
+        autocomplete="email"
+        [value]="email()"
+        [attr.aria-invalid]="mensagemEmail() ? 'true' : null"
+        [attr.aria-describedby]="mensagemEmail() ? 'confirmar-email-email-erro' : null"
+        (input)="aoDigitarEmail($event)"
+        (blur)="aoSairDoEmail()"
+      />
+      @if (mensagemEmail(); as erroEmail) {
+        <p class="erro" id="confirmar-email-email-erro">{{ erroEmail }}</p>
+      }
+    </div>
+
+    <div class="campo">
+      <label for="confirmar-email-codigo">Código de 6 dígitos</label>
+      <input
+        #campoCodigo
+        id="confirmar-email-codigo"
+        type="text"
+        inputmode="numeric"
+        autocomplete="one-time-code"
+        [value]="codigo()"
+        [attr.aria-invalid]="mensagemCodigo() ? 'true' : null"
+        [attr.aria-describedby]="mensagemCodigo() ? 'confirmar-email-codigo-erro' : null"
+        (input)="aoDigitarCodigo($event)"
+        (blur)="aoSairDoCodigo()"
+      />
+      @if (mensagemCodigo(); as erroCodigo) {
+        <p class="erro" id="confirmar-email-codigo-erro">{{ erroCodigo }}</p>
+      }
+    </div>
+
+    @if (erro(); as texto) {
+      <p class="falha" role="alert">{{ texto }}</p>
+    }
+
+    <div role="status">
+      @if (reenviado()) {
+        <p class="sucesso">{{ mensagens.texto('AC_001_6_CODIGO_REENVIADO') }}</p>
+      }
+    </div>
+
+    <button
+      type="submit"
+      class="confirmar"
+      [disabled]="acaoEmVoo() !== null"
+      [attr.aria-busy]="acaoEmVoo() === 'confirmando' ? 'true' : null"
+    >
+      Confirmar e-mail
+    </button>
+
+    <button
+      #botaoReenviar
+      type="button"
+      class="reenviar"
+      [disabled]="acaoEmVoo() !== null"
+      [attr.aria-busy]="acaoEmVoo() === 'reenviando' ? 'true' : null"
+      (click)="aoReenviar()"
+    >
+      Reenviar código
+    </button>
+  </form>
+</main>
